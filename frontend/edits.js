@@ -66,4 +66,79 @@ function withPreset(edits, p) {
   e.preset = p ? { name: p.name, base, applied: lookOf(e) } : null;
   return e;
 }
-export { DEFAULT_EDITS, MASK_ADJ, SKY_LOOKS, mergeDefaults, isEdited, mergeSettings, PRESET_SKIP, lookOf, keepTweaks, withPreset };
+// ---------------------------------------------------------------------------
+// Copy / paste / sync settings — the groups offered in the Copy Settings
+// dialog, as in Lightroom. Each group owns one or more paths of the recipe;
+// every setting of DEFAULT_EDITS belongs to exactly one group (tested), so a
+// setting added later cannot silently escape copying. Masks are listed one by
+// one by the dialog itself, since each photo has its own.
+// ---------------------------------------------------------------------------
+const COPY_GROUPS = [
+  { section: 'Basic', id: 'wb', label: 'White balance', paths: ['wb'] },
+  { section: 'Basic', id: 'exposure', label: 'Exposure', paths: ['tone.exposure'] },
+  { section: 'Basic', id: 'contrast', label: 'Contrast', paths: ['tone.contrast'] },
+  { section: 'Basic', id: 'highlights', label: 'Highlights', paths: ['tone.highlights'] },
+  { section: 'Basic', id: 'shadows', label: 'Shadows', paths: ['tone.shadows'] },
+  { section: 'Basic', id: 'whites', label: 'Whites', paths: ['tone.whites'] },
+  { section: 'Basic', id: 'blacks', label: 'Blacks', paths: ['tone.blacks'] },
+  { section: 'Presence', id: 'texture', label: 'Texture', paths: ['presence.texture'] },
+  { section: 'Presence', id: 'clarity', label: 'Clarity', paths: ['presence.clarity'] },
+  { section: 'Presence', id: 'dehaze', label: 'Dehaze', paths: ['presence.dehaze'] },
+  { section: 'Presence', id: 'vibrance', label: 'Vibrance', paths: ['presence.vibrance'] },
+  { section: 'Presence', id: 'saturation', label: 'Saturation', paths: ['presence.saturation'] },
+  { section: 'Tone & colour', id: 'curve', label: 'Tone curve', paths: ['curve'] },
+  { section: 'Tone & colour', id: 'hsl', label: 'HSL / colour mixer', paths: ['hsl'] },
+  { section: 'Tone & colour', id: 'grading', label: 'Colour grading', paths: ['grading'] },
+  { section: 'Detail', id: 'sharpen', label: 'Sharpening', paths: ['detail'] },
+  { section: 'Detail', id: 'denoise', label: 'Noise reduction', paths: ['presence.denoise', 'presence.denoiseDetail'] },
+  { section: 'Lens corrections', id: 'lensProfile', label: 'Lens profile', paths: ['lens.autoProfile', 'lens.profileVignette'] },
+  { section: 'Lens corrections', id: 'lensManual', label: 'Manual distortion & vignetting', paths: ['lens.distortion', 'lens.vignette'] },
+  { section: 'Effects', id: 'vignette', label: 'Post-crop vignette', paths: ['effects.vignette', 'effects.midpoint', 'effects.feather', 'effects.roundness'] },
+  { section: 'Effects', id: 'grain', label: 'Grain', paths: ['effects.grain', 'effects.grainSize'] },
+  { section: 'Effects', id: 'glow', label: 'Glow', paths: ['effects.glow'] },
+  { section: 'Effects', id: 'sunFlare', label: 'Sun flare', paths: ['effects.sunFlare'] },
+  { section: 'Effects', id: 'colorEnhance', label: 'Colour enhance', paths: ['effects.colorEnhance'] },
+  { section: 'Effects', id: 'dynamicContrast', label: 'Dynamic contrast', paths: ['effects.dynamicContrast'] },
+  { section: 'Geometry', id: 'crop', label: 'Crop', paths: ['crop.x', 'crop.y', 'crop.w', 'crop.h', 'crop.aspect'] },
+  { section: 'Geometry', id: 'straighten', label: 'Straighten angle', paths: ['crop.angle'] },
+  { section: 'Geometry', id: 'flip', label: 'Flip', paths: ['crop.flipH', 'crop.flipV'] },
+  { section: 'Retouching', id: 'heal', label: 'Object removal', paths: ['heal'] },
+  { section: 'Retouching', id: 'clone', label: 'Clone stamp', paths: ['clone'] },
+];
+// Not settings of the look: format version, history snapshots, preset bookkeeping.
+const COPY_NEVER = new Set(['v', 'snapshots', 'preset', 'masks']);
+// Like Lightroom: geometry, retouching and masks are photo-specific, so they
+// start unchecked; everything else starts checked.
+const COPY_OFF_BY_DEFAULT = new Set(['crop', 'straighten', 'flip', 'heal', 'clone']);
+
+const _get = (o, p) => p.split('.').reduce((a, k) => (a == null ? a : a[k]), o);
+const _set = (o, p, v) => { const ks = p.split('.'); let c = o; for (let i = 0; i < ks.length - 1; i++) c = c[ks[i]] ??= {}; c[ks[ks.length - 1]] = v; };
+
+/** Group ids whose settings differ from the defaults in edits (the "Modified" button). */
+function modifiedGroups(edits) {
+  const d = DEFAULT_EDITS();
+  return COPY_GROUPS.filter(g => g.paths.some(p => JSON.stringify(_get(edits, p)) !== JSON.stringify(_get(d, p)))).map(g => g.id);
+}
+
+/** A clipboard holding only the chosen groups and masks of edits. */
+function pickSettings(edits, groupIds, maskIds = []) {
+  const want = new Set(groupIds), values = {};
+  for (const g of COPY_GROUPS) if (want.has(g.id)) for (const p of g.paths) _set(values, p, deepClone(_get(edits, p)));
+  const ids = new Set(maskIds);
+  const masks = (edits.masks || []).filter(m => ids.has(m.id)).map(deepClone);
+  return { values, masks, groups: [...want].filter(id => COPY_GROUPS.some(g => g.id === id)) };
+}
+
+/** edits with a clipboard pasted in. Chosen settings replace the photo's own;
+ *  masks are added to the photo's masks (AI masks recompute for the new photo),
+ *  and a mask already pasted there once is not added twice. Pure. */
+function applySettings(edits, clip) {
+  const e = deepClone(edits);
+  mergeSettings(e, clip.values || {});
+  const have = new Set((e.masks || []).map(m => m.id));
+  e.masks = [...(e.masks || []), ...(clip.masks || []).filter(m => !have.has(m.id)).map(deepClone)];
+  return e;
+}
+
+export { DEFAULT_EDITS, MASK_ADJ, SKY_LOOKS, mergeDefaults, isEdited, mergeSettings, PRESET_SKIP, lookOf, keepTweaks, withPreset,
+  COPY_GROUPS, COPY_NEVER, COPY_OFF_BY_DEFAULT, modifiedGroups, pickSettings, applySettings };

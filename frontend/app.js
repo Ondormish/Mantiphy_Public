@@ -1,6 +1,6 @@
 import { Engine, curveLut } from './engine.js';
 import { $, $$, api, clamp, deepClone, getPath, setPath, uid, toast, status, loadImg, debounce, esc } from './util.js';
-import { DEFAULT_EDITS, MASK_ADJ, SKY_LOOKS, mergeDefaults, isEdited, mergeSettings, withPreset } from './edits.js';
+import { DEFAULT_EDITS, MASK_ADJ, SKY_LOOKS, mergeDefaults, isEdited, mergeSettings, withPreset, COPY_GROUPS, COPY_OFF_BY_DEFAULT, modifiedGroups, pickSettings, applySettings } from './edits.js';
 import { BUILTIN_PRESETS } from './presets-data.js';
 
 // ---------------------------------------------------------------------------
@@ -332,8 +332,8 @@ function photoMenu(ev, im) {
   const items = [];
   if (S.module !== 'develop') items.push({ label: 'Open in Develop', run: () => { S.activeId = im.id; setModule('develop'); } });
   items.push(
-    { label: 'Copy settings', run: () => copySettingsFrom(im.id) },
-    ...(S.copied ? [{ label: n > 1 || im.id !== S.activeId || S.module !== 'develop' ? `Paste settings to ${N}` : 'Paste settings', run: () => (n === 1 && im.id === S.activeId && S.module === 'develop') ? pasteSettings() : applyToSelection(S.copied, 'Pasting') }] : []),
+    { label: 'Copy settings…', run: () => copySettingsFrom(im.id) },
+    ...(S.copied ? [{ label: n > 1 || im.id !== S.activeId || S.module !== 'develop' ? `Paste settings to ${N}` : 'Paste settings', run: () => (n === 1 && im.id === S.activeId && S.module === 'develop') ? pasteSettings() : applyToSelection(ed => applySettings(ed, S.copied), 'Pasting') }] : []),
     '-',
     { label: `Export ${N}…`, run: () => $('#exportBtn').click() },
     { label: n > 1 ? `Duplicate ${N} (virtual copies)` : 'Duplicate (virtual copy)', run: createVirtualCopy },
@@ -351,8 +351,57 @@ function photoMenu(ev, im) {
 }
 async function copySettingsFrom(id) {
   const e = (S.module === 'develop' && id === S.activeId) ? S.edits : mergeDefaults((await api.get('/api/image/' + id)).edits);
-  S.copied = deepClone(e); for (const k of ['crop', 'masks', 'heal', 'clone', 'snapshots', 'preset']) delete S.copied[k];
-  toast('Settings copied');
+  openCopyDialog(e, { title: 'Copy settings', go: 'Copy' }, clip => { S.copied = clip; toast(`Copied ${clipSize(clip)}`); });
+}
+
+// ---- Copy / Sync settings dialog (Lightroom's "Copy Settings") ----------------
+// The last choice is remembered, so Ctrl+Shift+C can copy it without the dialog.
+// Masks are photo-specific, so only "copy the masks or not" is remembered.
+const COPY_SEL_KEY = 'mantiphy.copySelection';
+function copySelection() {
+  try { const v = JSON.parse(localStorage.getItem(COPY_SEL_KEY)); if (v && Array.isArray(v.groups)) return v; } catch { }
+  return { groups: COPY_GROUPS.filter(g => !COPY_OFF_BY_DEFAULT.has(g.id)).map(g => g.id), masks: false };
+}
+const clipSize = clip => { const n = clip.groups.length + clip.masks.length; return `${n} setting${n === 1 ? '' : 's'}`; };
+function quickCopy() {
+  const sel = copySelection();
+  S.copied = pickSettings(S.edits, sel.groups, sel.masks ? S.edits.masks.map(m => m.id) : []);
+  toast(`Copied ${clipSize(S.copied)} (last choice)`);
+}
+function openCopyDialog(edits, { title, go }, onDone) {
+  const dlg = $('#dlgCopy'), box = $('#copySets'), sel = copySelection(), on = new Set(sel.groups);
+  const sections = [...new Set(COPY_GROUPS.map(g => g.section))];
+  const item = (kind, id, label, checked, note = '') =>
+    `<label class="ck"><input type="checkbox" data-${kind}="${esc(id)}" ${checked ? 'checked' : ''}><span>${esc(label)}</span>${note ? `<small>${esc(note)}</small>` : ''}</label>`;
+  const masks = edits.masks || [];
+  box.innerHTML = sections.map(sec => `<div class="copysec"><label class="ck sec"><input type="checkbox" data-sec="${esc(sec)}"><span>${esc(sec)}</span></label><div class="sub">` +
+      COPY_GROUPS.filter(g => g.section === sec).map(g => item('g', g.id, g.label, on.has(g.id))).join('') + '</div></div>').join('') +
+    `<div class="copysec"><label class="ck sec"><input type="checkbox" data-sec="Masks"><span>Masks</span></label><div class="sub">` +
+    (masks.length ? masks.map(m => { const t = m.type === 'ai' ? 'AI, redetected' : ({ linear: 'gradient', radial: 'radial', brush: 'brush' })[m.type] || ''; return item('m', m.id, m.name || 'Mask', sel.masks, (m.name || '').toLowerCase().includes(t) || (m.type === 'linear' && /linear/i.test(m.name)) ? '' : t); }).join('')
+                  : '<span class="copynote">No masks on this photo</span>') + '</div></div>' +
+    '<div class="copynote">Pasted masks are added to the target photo\'s own; AI masks (subject, sky, people) are detected again on each photo. Object removal and clone strokes replace the target\'s.</div>';
+  const secBoxes = () => $$('[data-sec]', box);
+  const refreshSections = () => secBoxes().forEach(sb => {
+    const kids = $$('input[data-g], input[data-m]', sb.closest('.copysec'));
+    const n = kids.filter(k => k.checked).length;
+    sb.checked = kids.length > 0 && n === kids.length; sb.indeterminate = n > 0 && n < kids.length; sb.disabled = !kids.length;
+  });
+  box.onchange = e => {
+    if (e.target.dataset.sec) $$('input[data-g], input[data-m]', e.target.closest('.copysec')).forEach(k => { k.checked = e.target.checked; });
+    refreshSections();
+  };
+  const setAll = pred => { $$('input[data-g]', box).forEach(k => { k.checked = pred(k.dataset.g); }); $$('input[data-m]', box).forEach(k => { k.checked = pred(null); }); refreshSections(); };
+  $('#copyAll').onclick = () => setAll(() => true);
+  $('#copyNone').onclick = () => setAll(() => false);
+  $('#copyModified').onclick = () => { const mod = new Set(modifiedGroups(edits)); setAll(id => id === null ? true : mod.has(id)); };
+  $('#copyTitle').textContent = title; $('#copyGo').textContent = go;
+  $('#copyGo').onclick = () => {
+    const groups = $$('input[data-g]:checked', box).map(k => k.dataset.g), maskIds = $$('input[data-m]:checked', box).map(k => k.dataset.m);
+    if (!groups.length && !maskIds.length) return toast('Nothing checked');
+    try { localStorage.setItem(COPY_SEL_KEY, JSON.stringify({ groups, masks: masks.length ? maskIds.length > 0 : sel.masks })); } catch { }
+    dlg.close(); onDone(pickSettings(edits, groups, maskIds));
+  };
+  refreshSections(); dlg.showModal();
 }
 async function removePhotos(disk) {
   const ids = targets(); if (!ids.length) return;
@@ -515,7 +564,7 @@ function buildQuick() {
   $('#keywords').onchange = () => patchImages({ keywords: $('#keywords').value });
   $('#selAllBtn').onclick = selectAll;
   $('#selNoneBtn').onclick = selectNone;
-  $('#batchPasteBtn').onclick = () => S.copied ? applyToSelection(S.copied, 'Pasting') : toast('Copy settings from a photo first (Develop \u2192 Copy settings)');
+  $('#batchPasteBtn').onclick = () => S.copied ? applyToSelection(ed => applySettings(ed, S.copied), 'Pasting') : toast('Copy settings from a photo first (right-click \u2192 Copy settings\u2026)');
   $('#batchResetBtn').onclick = () => { const ids = targets(); if (!ids.length) return toast('Select photos first'); if (confirm(`Reset all edits on ${ids.length} photo${ids.length > 1 ? 's' : ''}?`)) applyToSelection(DEFAULT_EDITS(), 'Resetting'); };
   $('#batchPreset').onchange = e => { const p = S.presets[+e.target.value]; e.target.selectedIndex = 0; if (p) applyToSelection(ed => withPreset(ed, p), `Applying \u201c${p.name}\u201d`); };
   $('#cellSize').oninput = () => $('#grid').style.setProperty('--cell', $('#cellSize').value + 'px');
@@ -611,7 +660,7 @@ async function openInDevelop(id) {
     const [full, img, img16] = await Promise.all([api.get('/api/image/' + id), loadImg('/api/image/' + id + '/preview'), loadImage16(id).catch(() => null)]);
     if (S.activeId !== id) return;
     origPreview = img; origPreview16 = img16; maskCanvases.clear(); healCanvas = null; healAppliedSig = null; cloneCanvas = null; curCloneStroke = null; healedPreview = null;
-    S.edits = mergeDefaults(full.edits); S.history = [{ label: 'Open', edits: deepClone(S.edits) }]; S.histIdx = 0;
+    S.edits = mergeDefaults(full.edits); S.editsId = id; S.history = [{ label: 'Open', edits: deepClone(S.edits) }]; S.histIdx = 0;
     S.activeMask = null; setTool(null); S.zoom = 'fit'; S.before = false;
     lensProfile = null; syncLensPanel();
     api.get('/api/image/' + id + '/lensprofile').then(p => { if (S.activeId === id) { lensProfile = p; syncLensPanel(); requestRender(); } }).catch(() => { if (S.activeId === id) syncLensPanel(); });
@@ -625,13 +674,26 @@ function syncLensPanel() {
   const el = $('#lensProfileStatus'); if (!el) return;
   el.textContent = lensProfile?.matched ? `Matched: ${lensProfile.cameraName} — ${lensProfile.lensName}` : 'No matching profile — using manual sliders only.';
 }
-const saveEdits = debounce(async () => {
-  const id = S.activeId; if (!id) return;
-  await api.send('/api/image/' + id, 'PATCH', { edits: S.edits }).catch(e => toast('Save failed: ' + e.message));
-  const im = S.byId.get(id); if (im) im.edited = isEdited(S.edits);
-  await pushEditedThumb(id);
-  refreshCell(id);
-}, 600);
+// Saves are debounced and go to the photo S.edits was loaded from (S.editsId),
+// never to S.activeId: that switches to the next photo as soon as it is
+// clicked, while S.edits still holds the previous one until its preview has
+// loaded — saving to S.activeId wrote one photo's edits onto the next.
+// A pending save for another photo is flushed rather than dropped.
+let pendingSave = null, pendingSaveTimer = null;
+function saveEdits() {
+  const id = S.editsId; if (!id) return;
+  if (pendingSave && pendingSave.id !== id) flushSave();
+  pendingSave = { id, edits: S.edits };
+  clearTimeout(pendingSaveTimer); pendingSaveTimer = setTimeout(flushSave, 600);
+}
+async function flushSave() {
+  clearTimeout(pendingSaveTimer);
+  const p = pendingSave; pendingSave = null; if (!p) return;
+  await api.send('/api/image/' + p.id, 'PATCH', { edits: p.edits }).catch(e => toast('Save failed: ' + e.message));
+  const im = S.byId.get(p.id); if (im) im.edited = isEdited(p.edits);
+  await pushEditedThumb(p.id);
+  refreshCell(p.id);
+}
 
 /** Render the current develop state at thumbnail size and hand it to the
  *  backend, so the library stops showing the untouched original. Cheap: it
@@ -752,11 +814,35 @@ function bindDevelop() {
   $$('.loupe-bar .zoom button').forEach(b => b.onclick = () => setZoom(b.dataset.z));
   $('#savePresetBtn').onclick = e => { e.stopPropagation(); askName('Save preset', 'Preset name', '', async (name, folder) => { const s = deepClone(S.edits); delete s.preset; delete s.crop; delete s.masks; delete s.heal; delete s.clone; delete s.snapshots; await api.send('/api/presets', 'POST', { name, grp: folder, settings: s }); refreshPresets(); toast('Preset saved'); }, { folder: true, folderVal: 'User' }); };
   $('#resetAllBtn').onclick = e => { e.stopPropagation(); S.edits = DEFAULT_EDITS(); maskCanvases.clear(); healCanvas = null; cloneCanvas = null; syncHeal(true).then(async () => { await syncClone(); maybeUseCleanTexture(); syncUI(); commit('Reset all'); requestRender(); }); };
-  $('#copyBtn').onclick = () => { S.copied = deepClone(S.edits); delete S.copied.preset; delete S.copied.crop; delete S.copied.masks; delete S.copied.heal; delete S.copied.clone; delete S.copied.snapshots; toast('Settings copied'); };
+  $('#copyBtn').onclick = () => S.activeId && copySettingsFrom(S.activeId);
   $('#pasteBtn').onclick = pasteSettings;
-  $('#syncBtn').onclick = async () => { const ids = targets().filter(i => i !== S.activeId); if (!ids.length) return toast('Select other photos in the filmstrip (Ctrl/Shift-click)'); const s = deepClone(S.edits); delete s.preset; delete s.crop; delete s.masks; delete s.heal; delete s.clone; delete s.snapshots; for (const id of ids) { const full = await api.get('/api/image/' + id); const e = mergeDefaults(full.edits); Object.assign(e, s); await api.send('/api/image/' + id, 'PATCH', { edits: e }); S.byId.get(id).edited = true; } toast(`Synced to ${ids.length} photo${ids.length > 1 ? 's' : ''}`); };
+  $('#syncBtn').onclick = () => {
+    const ids = targets().filter(i => i !== S.activeId);
+    if (!ids.length) return toast('Select other photos in the filmstrip (Ctrl/Shift-click)');
+    openCopyDialog(S.edits, { title: `Sync settings to ${ids.length} photo${ids.length > 1 ? 's' : ''}`, go: 'Synchronize' }, async clip => {
+      let done = 0;
+      for (const id of ids) {
+        status(`Syncing ${++done}/${ids.length}\u2026`);
+        try {
+          const e = applySettings(mergeDefaults((await api.get('/api/image/' + id)).edits), clip);
+          await api.send('/api/image/' + id, 'PATCH', { edits: e });
+          const im = S.byId.get(id); if (im) { im.edited = isEdited(e); refreshCell(id); }
+        } catch (err) { toast(`${S.byId.get(id)?.filename}: ${err.message}`); }
+      }
+      status(''); toast(`Synced ${clipSize(clip)} to ${ids.length} photo${ids.length > 1 ? 's' : ''}`);
+    });
+  };
 }
-function pasteSettings() { if (!S.copied) return toast('Nothing copied yet'); Object.assign(S.edits, deepClone(S.copied)); syncUI(); ensureDenoise(); commit('Paste settings'); requestRender(); }
+function pasteSettings() {
+  if (!S.copied) return toast('Nothing copied yet');
+  const healBefore = JSON.stringify(S.edits.heal.strokes), activeId = S.activeMask?.id;
+  Object.assign(S.edits, applySettings(S.edits, S.copied));
+  S.activeMask = S.edits.masks.find(m => m.id === activeId) || null;
+  renderMaskList(); syncUI(); ensureDenoise(); commit('Paste settings'); requestRender();
+  // Pasted masks and retouching need their textures built for this photo.
+  if (JSON.stringify(S.edits.heal.strokes) !== healBefore) { healCanvas = null; syncHeal(true).then(async () => { await syncClone(); maybeUseCleanTexture(); requestRender(); }); }
+  else { cloneCanvas = null; rebuildMaskTextures().then(() => syncClone()).then(() => { maybeUseCleanTexture(); requestRender(); }); }
+}
 async function refreshPresets() {
   S.presets = [...BUILTIN_PRESETS, ...await api.get('/api/presets')]; const l = $('#presetList'); l.innerHTML = '';
   const collapsed = JSON.parse(localStorage.getItem('presetFoldersCollapsed') || '{}');
@@ -1860,7 +1946,7 @@ function bindSlideshow() {
 // ---------------------------------------------------------------------------
 // keyboard
 // ---------------------------------------------------------------------------
-const KEYS = [['G', 'Library grid'], ['D', 'Develop'], ['← →', 'Previous / next photo'], ['1–5 / 0', 'Rating'], ['P / X / U', 'Pick / reject / unflag'], ['6–9', 'Colour label'], ['R', 'Crop tool'], ['M', 'Masks'], ['O', 'Show / hide mask overlay'], ['H', 'Remove object'], ['C', 'Clone stamp'], ['\\', 'Before / after'], ['J', 'Clipping warnings'], ['I', 'Info overlay'], ['Space', 'Toggle fit / 1:1'], ['Ctrl Z / Ctrl Shift Z', 'Undo / redo'], ['Ctrl C / Ctrl V', 'Copy / paste settings'], ['Ctrl Shift E', 'Export'], ['Ctrl A', 'Select all'], ['Esc', 'Close tool / deselect'], ['Alt + brush', 'Erase'], ['Alt-click (Clone tool)', 'Set clone source'], ['Double-click slider name', 'Reset slider'], ['Scroll on slider', 'Nudge (Shift ×10)'], ['Space / ← → / Esc (during Slideshow)', 'Pause / prev-next / exit']];
+const KEYS = [['G', 'Library grid'], ['D', 'Develop'], ['← →', 'Previous / next photo'], ['1–5 / 0', 'Rating'], ['P / X / U', 'Pick / reject / unflag'], ['6–9', 'Colour label'], ['R', 'Crop tool'], ['M', 'Masks'], ['O', 'Show / hide mask overlay'], ['H', 'Remove object'], ['C', 'Clone stamp'], ['\\', 'Before / after'], ['J', 'Clipping warnings'], ['I', 'Info overlay'], ['Space', 'Toggle fit / 1:1'], ['Ctrl Z / Ctrl Shift Z', 'Undo / redo'], ['Ctrl C / Ctrl V', 'Copy (choose) / paste settings'], ['Ctrl Shift C', 'Copy settings, last choice'], ['Ctrl Shift E', 'Export'], ['Ctrl A', 'Select all'], ['Esc', 'Close tool / deselect'], ['Alt + brush', 'Erase'], ['Alt-click (Clone tool)', 'Set clone source'], ['Double-click slider name', 'Reset slider'], ['Scroll on slider', 'Nudge (Shift ×10)'], ['Space / ← → / Esc (during Slideshow)', 'Pause / prev-next / exit']];
 function buildKeys() { $('#keysList').innerHTML = KEYS.map(([k, d]) => `<div><span>${d}</span><span class="kbd">${k}</span></div>`).join(''); }
 function onKey(e) {
   if (!$('#slideshowView').classList.contains('hidden')) {
@@ -1873,7 +1959,7 @@ function onKey(e) {
   if (e.target?.matches?.('input,textarea,select') || document.querySelector('dialog[open]')) { if (e.key === 'Escape') e.target.blur?.(); return; }
   const k = e.key, ctrl = e.ctrlKey || e.metaKey;
   if (ctrl && k.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
-  if (ctrl && k.toLowerCase() === 'c') { if (S.module === 'develop') { $('#copyBtn').click(); e.preventDefault(); } return; }
+  if (ctrl && k.toLowerCase() === 'c') { if (S.module === 'develop') { e.shiftKey ? quickCopy() : $('#copyBtn').click(); e.preventDefault(); } return; }
   if (ctrl && k.toLowerCase() === 'v') { if (S.module === 'develop') { pasteSettings(); e.preventDefault(); } return; }
   if (ctrl && e.shiftKey && k.toLowerCase() === 'e') { e.preventDefault(); $('#exportBtn').click(); return; }
   if (ctrl && k.toLowerCase() === 'a') { e.preventDefault(); selectAll(); return; }

@@ -307,3 +307,15 @@ dialog .inline input[type=checkbox]{flex:none;width:14px;height:14px;accent-colo
 .stackmode input{grid-row:span 2;margin-top:2px}
 .stackmode small{color:var(--text-faint);font-size:11.5px;line-height:1.4}
 .stackmode:has(input:checked){border-color:var(--accent);background:var(--bg-2)}
+
+/* Copy / Sync settings dialog */
+#dlgCopy{width:min(760px,94vw)}
+#dlgCopy footer .grow{flex:1}
+.copysets{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px 26px;max-height:62vh;overflow:auto;padding-right:4px}
+.copysec{display:grid;gap:4px;align-content:start}
+dialog .body label.ck{display:flex;align-items:center;gap:8px;grid-template-columns:none;font-size:12.5px;color:var(--text-dim);cursor:pointer}
+dialog .body label.ck.sec{color:var(--text);font-weight:600;margin-bottom:2px}
+dialog .body label.ck input{flex:none;width:14px;height:14px;margin:0;accent-color:var(--accent)}
+dialog .body label.ck small{color:var(--text-dim);opacity:.7;margin-left:auto}
+.copysec .sub{padding-left:22px;display:grid;gap:4px}
+.copynote{grid-column:1/-1;font-size:11.5px;color:var(--text-dim)}

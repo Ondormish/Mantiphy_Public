@@ -101,7 +101,7 @@
     <section class="panel" id="pSnap">
       <header><span class="chev"></span>Copy &amp; sync</header>
       <div class="body hint">
-        <div class="row"><button class="chip" id="copyBtn">Copy settings</button><button class="chip" id="pasteBtn">Paste</button><button class="chip" id="syncBtn">Sync to selection</button></div>
+        <div class="row"><button class="chip" id="copyBtn" title="Choose what to copy (Ctrl+C) — Ctrl+Shift+C copies the last choice directly">Copy settings…</button><button class="chip" id="pasteBtn" title="Ctrl+V">Paste</button><button class="chip" id="syncBtn">Sync to selection…</button></div>
         Paste applies tone, colour, detail and effects. Crop and masks stay per photo.
       </div>
     </section>
@@ -435,6 +435,14 @@
     <datalist id="presetFolders"></datalist>
   </div>
   <footer><button class="tb" data-close>Cancel</button><button class="tb primary" id="nameGo">Save</button></footer>
+</dialog>
+
+<dialog id="dlgCopy">
+  <header id="copyTitle">Copy settings</header>
+  <div class="body">
+    <div class="copysets" id="copySets"></div>
+  </div>
+  <footer><button class="tb" id="copyAll">Check all</button><button class="tb" id="copyNone">Check none</button><button class="tb" id="copyModified" title="Only what differs from the defaults on this photo">Modified</button><span class="grow"></span><button class="tb" data-close>Cancel</button><button class="tb primary" id="copyGo">Copy</button></footer>
 </dialog>
 
 <dialog id="dlgPick">

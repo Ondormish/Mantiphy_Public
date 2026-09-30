@@ -179,6 +179,54 @@ const scenarios = {
     const files = existsSync(dest) ? readdirSync(dest) : [];
     assert(files.some(f => f.endsWith('.jpg')) && files.some(f => f.endsWith('.tif')), 'exported files: ' + files);
   },
+
+  async 'copy settings lets you choose, paste and sync apply only the choice'() {
+    const val = p => page.$eval(`.sl[data-path="${p}"] .val`, e => +e.value);
+    await develop('burst_1');
+    // Navigate through the filmstrip from here on: a page reload would empty the clipboard.
+    const ids = await page.$$eval('#filmstrip .fcell', cs => cs.map(c => c.dataset.id));
+    const names = await page.evaluate(ids => Promise.all(ids.map(id => fetch('/api/image/' + id).then(r => r.json()).then(j => j.filename))), ids);
+    const cellOf = n => page.$(`#filmstrip .fcell[data-id="${ids[names.indexOf(n)]}"]`);
+    const open = async (n, modifiers = []) => { await (await cellOf(n)).click({ modifiers }); await wait(1800); };
+    const editsOf = n => page.evaluate(id => fetch('/api/image/' + id).then(r => r.json()).then(j => j.edits), ids[names.indexOf(n)]);
+
+    await setSlider('.sl[data-path="tone.exposure"]', 1.2); await setSlider('.sl[data-path="tone.contrast"]', 30); await wait(300);
+    await page.click('#copyBtn'); await wait(200);
+    assert(await page.$('#dlgCopy[open]'), 'the Copy Settings dialog opens');
+    await page.click('#copyModified'); await wait(100);
+    const checked = await page.$$eval('#copySets input[data-g]:checked', ks => ks.map(k => k.dataset.g).sort());
+    assert(JSON.stringify(checked) === JSON.stringify(['contrast', 'exposure']), '"Modified" checks exactly what was changed: ' + checked);
+    await page.click('#copySets input[data-g="contrast"]');             // keep exposure only
+    await page.click('#copyGo'); await wait(200);
+
+    await open('burst_2.jpg');
+    await page.keyboard.press('Control+v'); await wait(400);
+    assert(await val('tone.exposure') === 1.2, 'exposure pasted');
+    assert(await val('tone.contrast') === 0, 'contrast was left out of the copy');
+
+    // Sync from burst_1 (active, clicked last) to burst_3 and burst_4, contrast only.
+    await open('burst_3.jpg'); await open('burst_4.jpg', ['Control']); await open('burst_1.jpg', ['Control']);
+    await page.click('#syncBtn'); await wait(200);
+    assert((await page.textContent('#copyTitle')).includes('2 photos'), 'sync dialog names the target count');
+    await page.click('#copyNone'); await page.click('#copySets input[data-g="contrast"]'); await page.click('#copyGo'); await wait(1500);
+    for (const n of ['burst_3.jpg', 'burst_4.jpg']) {
+      const e = await editsOf(n);
+      assert(e.tone.contrast === 30 && (e.tone.exposure || 0) === 0, `${n} got contrast only: ` + JSON.stringify(e.tone));
+    }
+  },
+
+  async 'switching photo right after an edit saves it to the right photo'() {
+    await develop('burst_5');
+    const ids = await page.$$eval('#filmstrip .fcell', cs => cs.map(c => c.dataset.id));
+    const names = await page.evaluate(ids => Promise.all(ids.map(id => fetch('/api/image/' + id).then(r => r.json()).then(j => j.filename))), ids);
+    const idOf = n => ids[names.indexOf(n)];
+    const editsOf = n => page.evaluate(id => fetch('/api/image/' + id).then(r => r.json()).then(j => j.edits), idOf(n));
+    await setSlider('.sl[data-path="tone.whites"]', 42);
+    await (await page.$(`#filmstrip .fcell[data-id="${idOf('landscape.jpg')}"]`)).click();   // within the save delay
+    await wait(2500);
+    assert((await editsOf('burst_5.jpg')).tone.whites === 42, 'the edit reached the photo it was made on');
+    assert(((await editsOf('landscape.jpg')).tone?.whites || 0) === 0, 'the next photo was not overwritten');
+  },
 };
 
 let failed = 0;
