@@ -1,7 +1,7 @@
 # Third-party code in this folder
 
 These files are redistributed unmodified under their own licenses, which
-continue to apply to them (Mantiphy's MIT license covers the rest of the repository).
+continue to apply to them (Mantiphy's own license, in the repository's LICENSE file, covers the rest).
 
 ## Leaflet 1.9.4 — `leaflet.js`, `leaflet.css`, `images/`
 

@@ -1,5 +1,5 @@
 import { Engine, curveLut } from './engine.js';
-import { $, $$, api, clamp, deepClone, getPath, setPath, uid, toast, status, loadImg, debounce } from './util.js';
+import { $, $$, api, clamp, deepClone, getPath, setPath, uid, toast, status, loadImg, debounce, esc } from './util.js';
 import { DEFAULT_EDITS, MASK_ADJ, SKY_LOOKS, mergeDefaults, isEdited, mergeSettings, withPreset } from './edits.js';
 import { BUILTIN_PRESETS } from './presets-data.js';
 
@@ -57,7 +57,7 @@ const glCanvas = $('#gl');
 // boot
 // ---------------------------------------------------------------------------
 async function boot() {
-  try { engine = new Engine(glCanvas); } catch (e) { document.body.innerHTML = `<div class="empty"><h2>WebGL2 is required</h2><p>${e.message}</p></div>`; return; }
+  try { engine = new Engine(glCanvas); } catch (e) { document.body.innerHTML = `<div class="empty"><h2>WebGL2 is required</h2><p>${esc(e.message)}</p></div>`; return; }
   S.health = await api.get('/api/health').catch(() => ({}));
   if (!S.health.rawpy) toast('rawpy missing — RAW files cannot be decoded');
   if (!S.health.ai) { $('#addSubject').disabled = $('#addBackground').disabled = $('#addPeople').disabled = true; $('#addSubject').title = $('#addBackground').title = $('#addPeople').title = 'Install rembg + onnxruntime to enable AI subject masks'; }
@@ -190,8 +190,8 @@ async function refreshFolders() {
     const n = document.createElement('div'); n.className = 'node' + (S.folder === f.path ? ' on' : '');
     n.style.paddingLeft = (14 + f.depth * 13) + 'px';
     n.innerHTML = `<span class="tw${kids ? '' : ' leaf'}">${kids ? (open ? '\u25be' : '\u25b8') : ''}</span>` +
-      `<svg><use href="#i-folder"/></svg><span title="${f.path}">${f.name}</span>` +
-      `<span class="n">${f.n}</span>` + (f.root ? `<span class="watch${f.watched ? ' on' : ''}" title="${f.watched ? 'Stop watching for new photos' : 'Watch for new photos (tethering)'}"><svg><use href="#i-watch"/></svg></span><span class="x" title="Remove from catalog">\u00d7</span>` : '');
+      `<svg><use href="#i-folder"/></svg><span title="${esc(f.path)}">${esc(f.name)}</span>` +
+      `<span class="n">${esc(f.n)}</span>` + (f.root ? `<span class="watch${f.watched ? ' on' : ''}" title="${f.watched ? 'Stop watching for new photos' : 'Watch for new photos (tethering)'}"><svg><use href="#i-watch"/></svg></span><span class="x" title="Remove from catalog">\u00d7</span>` : '');
     n.onclick = e => {
       if (kids && e.target.classList.contains('tw')) { S.collapsed.has(f.path) ? S.collapsed.delete(f.path) : S.collapsed.add(f.path); saveCollapsed(); refreshFolders(); return; }
       if (e.target.closest('.watch')) { toggleWatch(f.path, !f.watched); return; }
@@ -246,7 +246,7 @@ async function refreshCollections() {
   S.collections = await api.get('/api/collections'); const t = $('#collTree'); t.innerHTML = '';
   for (const c of S.collections) {
     const n = document.createElement('div'); n.className = 'node' + (c.filter ? (S.smartCollection === c.id ? ' on' : '') : (S.collection === c.id ? ' on' : ''));
-    n.innerHTML = `<svg><use href="#${c.filter ? 'i-smart' : 'i-coll'}"/></svg><span>${c.name}</span><span class="n">${c.n}</span><span class="x" title="Delete collection">×</span>`;
+    n.innerHTML = `<svg><use href="#${c.filter ? 'i-smart' : 'i-coll'}"/></svg><span>${esc(c.name)}</span><span class="n">${esc(c.n)}</span><span class="x" title="Delete collection">×</span>`;
     n.onclick = e => {
       if (e.target.classList.contains('x')) { if (confirm(`Delete collection "${c.name}"?`)) fetch('/api/collections/' + c.id, { method: 'DELETE' }).then(() => { if (S.collection === c.id) S.collection = null; if (S.smartCollection === c.id) S.smartCollection = null; refreshCollections(); refreshImages(); }); return; }
       if (c.filter) {
@@ -275,9 +275,9 @@ async function refreshImages() {
 }
 function cellHtml(im, film = false) {
   const stars = im.rating ? '★'.repeat(im.rating) : '';
-  return `<img loading="lazy" src="/api/image/${im.id}/thumb${im.esig ? '?v=' + im.esig : ''}" onload="this.classList.add('ld')" alt="">
-    ${im.flag ? `<span class="flag ${im.flag}"></span>` : ''}${im.label ? `<span class="lbl" style="background:${LABELS[im.label]}"></span>` : ''}${im.copy_of ? `<span class="edited" style="left:4px;right:auto">Copy ${im.copy_index}</span>` : ''}
-    ${film ? (im.edited ? '<span class="fedited" title="Edited"></span>' : '') : `<span class="rawtag">${im.ext.toUpperCase()}</span>${im.edited ? '<span class="edited">edited</span>' : ''}<div class="meta"><span class="stars">${stars}</span><span>${im.filename}</span></div>`}`;
+  return `<img loading="lazy" src="/api/image/${esc(im.id)}/thumb${im.esig ? '?v=' + esc(im.esig) : ''}" onload="this.classList.add('ld')" alt="">
+    ${im.flag ? `<span class="flag ${esc(im.flag)}"></span>` : ''}${LABELS[im.label] ? `<span class="lbl" style="background:${LABELS[im.label]}"></span>` : ''}${im.copy_of ? `<span class="edited" style="left:4px;right:auto">Copy ${esc(im.copy_index)}</span>` : ''}
+    ${film ? (im.edited ? '<span class="fedited" title="Edited"></span>' : '') : `<span class="rawtag">${esc(im.ext.toUpperCase())}</span>${im.edited ? '<span class="edited">edited</span>' : ''}<div class="meta"><span class="stars">${stars}</span><span>${esc(im.filename)}</span></div>`}`;
 }
 function groupKey(im) {
   // deux fichiers sont deux versions d'une meme prise s'ils partagent l'instant de capture
@@ -309,7 +309,7 @@ function renderGrid() {
       + (it.key && it.head && !it.open ? ' stacked' : '') + (it.key && it.open ? ' instack' : '');
     c.dataset.id = im.id;
     c.innerHTML = cellHtml(im) + (it.key && it.head
-      ? `<span class="stackn" data-key="${it.key}" title="${it.n} versions of this shot — click to ${it.open ? 'collapse' : 'expand'}">\u29c9 ${it.open ? '\u2212' : it.n}</span>` : '');
+      ? `<span class="stackn" data-key="${esc(it.key)}" title="${esc(it.n)} versions of this shot — click to ${it.open ? 'collapse' : 'expand'}">\u29c9 ${it.open ? '\u2212' : it.n}</span>` : '');
     c.onclick = e => {
       const b = e.target.closest('.stackn');
       if (b) { e.stopPropagation(); S.expanded.has(b.dataset.key) ? S.expanded.delete(b.dataset.key) : S.expanded.add(b.dataset.key); renderGrid(); return; }
@@ -461,8 +461,8 @@ async function applyToSelection(partial, label) {
 // ---- menu contextuel -----------------------------------------------------------
 function closeCtx() { $('#ctxmenu').classList.add('hidden'); }
 function showCtx(x, y, title, items) {
-  const m = $('#ctxmenu'); m.innerHTML = (title ? `<div class="hd" title="${title}">${title}</div>` : '') +
-    items.map((it, i) => it === '-' ? '<div class="sep"></div>' : `<div class="mi${it.danger ? ' danger' : ''}" data-i="${i}">${it.label}</div>`).join('');
+  const m = $('#ctxmenu'); m.innerHTML = (title ? `<div class="hd" title="${esc(title)}">${esc(title)}</div>` : '') +
+    items.map((it, i) => it === '-' ? '<div class="sep"></div>' : `<div class="mi${it.danger ? ' danger' : ''}" data-i="${i}">${esc(it.label)}</div>`).join('');
   m.onclick = e => { const d = e.target.closest('.mi'); if (!d) return; closeCtx(); items[+d.dataset.i].run(); };
   m.classList.remove('hidden');
   const r = m.getBoundingClientRect();
@@ -499,7 +499,7 @@ function fmtMeta(im) {
 }
 function renderMeta() {
   const im = S.byId.get(S.activeId); const m = fmtMeta(im);
-  for (const el of [$('#metaLib'), $('#metaDev')]) el.innerHTML = Object.entries(m).map(([k, v]) => `<dt>${k}</dt><dd title="${v}">${v}</dd>`).join('');
+  for (const el of [$('#metaLib'), $('#metaDev')]) el.innerHTML = Object.entries(m).map(([k, v]) => `<dt>${esc(k)}</dt><dd title="${esc(v)}">${esc(v)}</dd>`).join('');
   $$('#quickRating .chip').forEach(b => b.classList.toggle('on', im && +b.dataset.v === im.rating && im.rating > 0));
   $$('#quickFlags .chip').forEach(b => b.classList.toggle('on', im && b.dataset.v === im.flag));
   $$('#quickLabels .chip').forEach(b => b.classList.toggle('on', im && b.dataset.v === im.label));
@@ -556,7 +556,7 @@ function bindLibrary() {
     if (d.parent) { const up = document.createElement('div'); up.className = 'node up'; up.textContent = '↑ ..'; up.onclick = () => browse(d.parent); b.append(up); }
     for (const x of d.dirs) {
       const n = document.createElement('div'); n.className = 'node';
-      n.innerHTML = `<svg style="width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.5"><use href="#i-folder"/></svg>${x.name}<span class="go" title="Open this folder">›</span>`;
+      n.innerHTML = `<svg style="width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.5"><use href="#i-folder"/></svg>${esc(x.name)}<span class="go" title="Open this folder">›</span>`;
       n.onclick = e => {
         if (e.target.closest('.go')) return browse(x.path);
         picked = picked?.path === x.path ? null : x;
@@ -584,7 +584,7 @@ function bindLibrary() {
   });
   $('#addToCollBtn').onclick = () => {
     if (!targets().length) return toast('Select photos first');
-    const l = $('#pickList'); l.innerHTML = S.collections.map(c => `<div class="node" data-id="${c.id}">${c.name}<span class="n">${c.n}</span></div>`).join('') || '<div class="node">No collections yet — create one first.</div>';
+    const l = $('#pickList'); l.innerHTML = S.collections.map(c => `<div class="node" data-id="${esc(c.id)}">${esc(c.name)}<span class="n">${esc(c.n)}</span></div>`).join('') || '<div class="node">No collections yet — create one first.</div>';
     l.onclick = async e => { const n = e.target.closest('[data-id]'); if (!n) return; try { await api.send(`/api/collections/${n.dataset.id}/items`, 'POST', { ids: targets() }); } catch (err) { return toast(err.message); } $('#dlgPick').close(); toast('Added to collection'); refreshCollections(); };
     $('#dlgPick').showModal();
   };
@@ -594,7 +594,7 @@ function askName(title, label, val, cb, opts) {
   const folderRow = $('#nameFolderRow'); folderRow.style.display = opts?.folder ? '' : 'none';
   if (opts?.folder) {
     $('#nameFolderInput').value = opts.folderVal || '';
-    $('#presetFolders').innerHTML = [...new Set(S.presets.filter(p => p.id).map(p => p.grp))].map(g => `<option value="${g}">`).join('');
+    $('#presetFolders').innerHTML = [...new Set(S.presets.filter(p => p.id).map(p => p.grp))].map(g => `<option value="${esc(g)}">`).join('');
   }
   const d = $('#dlgName'); d.showModal(); $('#nameInput').focus();
   $('#nameGo').onclick = () => { const v = $('#nameInput').value.trim(); if (!v) return; d.close(); cb(v, opts?.folder ? ($('#nameFolderInput').value.trim() || 'User') : undefined); };
@@ -770,7 +770,7 @@ async function refreshPresets() {
       det.append(sum); l.append(det); box = det;
     }
     const d = document.createElement('div'); d.className = 'preset'; d.dataset.name = p.name; d.title = p.desc ? p.desc + ' — click to apply, click again to remove' : 'Click to apply, click again to remove';
-    d.innerHTML = `<span>${p.name}</span>${p.id ? '<span class="x">×</span>' : ''}`;
+    d.innerHTML = `<span>${esc(p.name)}</span>${p.id ? '<span class="x">×</span>' : ''}`;
     d.onclick = e => { if (e.target.classList.contains('x')) { fetch('/api/presets/' + p.id, { method: 'DELETE' }).then(refreshPresets); return; } applyPreset(p); };
     d.onmouseenter = () => startPresetPreview(p); d.onmouseleave = endPresetPreview;
     box.append(d);
@@ -778,7 +778,7 @@ async function refreshPresets() {
   markActivePreset();
   const bp = $('#batchPreset');
   if (bp) bp.innerHTML = '<option value="">Apply a preset\u2026</option>' +
-    S.presets.map((p, i) => `<option value="${i}">${p.name}</option>`).join('');
+    S.presets.map((p, i) => `<option value="${i}">${esc(p.name)}</option>`).join('');
 }
 function applyPreset(p) {
   endPresetPreview();
@@ -893,9 +893,9 @@ function drawHisto() {
   g.globalCompositeOperation = 'source-over'; g.fillStyle = 'rgba(255,255,255,.15)'; g.beginPath(); g.moveTo(0, hh); for (let i = 0; i < 256; i++) g.lineTo(i / 255 * w, hh - Math.min(1, h.l[i] / mx) * hh); g.lineTo(w, hh); g.fill();
   const cs = (h.l[0] + h.l[1]) / Math.max(1, h.n), chp = (h.l[255] + h.l[254]) / Math.max(1, h.n);
   $('#clipS').style.borderColor = cs > 0.002 ? '#6a95e0' : ''; $('#clipH').style.borderColor = chp > 0.002 ? '#e06b5f' : '';
-  const im = S.byId.get(S.activeId); $('#histoMeta').innerHTML = im ? `<span>${im.iso ? 'ISO ' + im.iso : ''}</span><span>${im.focal ? im.focal + ' mm' : ''}</span><span>${im.aperture ? 'f/' + im.aperture : ''}</span><span>${im.shutter ? im.shutter + ' s' : ''}</span>` : '';
+  const im = S.byId.get(S.activeId); $('#histoMeta').innerHTML = im ? `<span>${im.iso ? 'ISO ' + esc(im.iso) : ''}</span><span>${im.focal ? esc(im.focal) + ' mm' : ''}</span><span>${im.aperture ? 'f/' + esc(im.aperture) : ''}</span><span>${im.shutter ? esc(im.shutter) + ' s' : ''}</span>` : '';
 }
-function drawInfo() { const im = S.byId.get(S.activeId); const m = fmtMeta(im); $('#info').innerHTML = `<b>${im.filename}</b><br>${m.Camera} · ${m.Lens}<br>${m.Exposure}<br>${m.Dimensions} · ${m.Captured}`; }
+function drawInfo() { const im = S.byId.get(S.activeId); const m = fmtMeta(im); $('#info').innerHTML = `<b>${esc(im.filename)}</b><br>${esc(m.Camera)} · ${esc(m.Lens)}<br>${esc(m.Exposure)}<br>${esc(m.Dimensions)} · ${esc(m.Captured)}`; }
 function setZoom(z) { S.zoom = z; S.pan = { x: 0, y: 0 }; $$('.loupe-bar .zoom button').forEach(b => b.classList.toggle('on', b.dataset.z === String(z))); requestRender(); }
 function toggleBefore() { S.before = !S.before; $('#beforeBtn').classList.toggle('on', S.before); requestRender(); }
 function toggleClip() { S.clip = !S.clip; $('#clipS').classList.toggle('on', S.clip); $('#clipH').classList.toggle('on', S.clip); requestRender(); }
@@ -1240,7 +1240,7 @@ function brushDab(ux, uy, start) {
 function renderMaskList() {
   const l = $('#maskList'); l.innerHTML = '';
   for (const m of S.edits.masks) {
-    const d = document.createElement('div'); d.className = 'maskitem' + (m === S.activeMask ? ' on' : ''); d.innerHTML = `<input type="checkbox" ${m.enabled !== false ? 'checked' : ''} title="Enable"><span class="sw"></span><span class="nm">${m.name}</span><span class="x" title="Delete">×</span>`;
+    const d = document.createElement('div'); d.className = 'maskitem' + (m === S.activeMask ? ' on' : ''); d.innerHTML = `<input type="checkbox" ${m.enabled !== false ? 'checked' : ''} title="Enable"><span class="sw"></span><span class="nm">${esc(m.name)}</span><span class="x" title="Delete">×</span>`;
     d.onclick = e => { if (e.target.type === 'checkbox') { m.enabled = e.target.checked; commit('Mask ' + (m.enabled ? 'on' : 'off')); requestRender(); return; } if (e.target.classList.contains('x')) { S.edits.masks = S.edits.masks.filter(x => x !== m); if (m.type === 'ai' && m.params?.kind === 'sky' && !m.autoSkyMatch) S.edits.masks = S.edits.masks.filter(x => !x.autoSkyMatch); if (S.activeMask === m) { S.activeMask = null; S.refineMode = null; } commit('Mask deleted'); renderMaskList(); syncMaskEditor(); requestRender(); return; } S.activeMask = m; S.refineMode = null; setTool('mask'); renderMaskList(); syncMaskEditor(); requestRender(); };
     $('.nm', d).ondblclick = () => askName('Rename mask', 'Name', m.name, n => { m.name = n; renderMaskList(); commit('Mask renamed'); });
     l.append(d);
@@ -1260,12 +1260,12 @@ function syncMaskEditor() {
     for (const [id, k] of [['bSize', 'size'], ['bFeather', 'feather'], ['bFlow', 'flow']]) { const sl = $('#' + id), r = $('input[type=range]', sl), v = $('.val', sl); r.value = S.brush[k]; v.value = S.brush[k]; r.oninput = () => { S.brush[k] = +r.value; v.value = r.value; }; }
   }
   if (m.type === 'radial') { g.innerHTML = `<div class="subhead">Shape</div><div class="sl" data-g="feather" data-min="0" data-max="100" data-step="1"><label>Feather</label><input class="val"><input type="range"></div><div class="sl" data-g="angle" data-min="-90" data-max="90" data-step="1"><label>Rotate</label><input class="val"><input type="range"></div><div class="sl" data-g="rx" data-min="0.01" data-max="1" data-step="0.01"><label>Width</label><input class="val"><input type="range"></div><div class="sl" data-g="ry" data-min="0.01" data-max="1" data-step="0.01"><label>Height</label><input class="val"><input type="range"></div>`; }
-  if (m.colorRange) { g.innerHTML = `<div class="subhead">Colour range</div><div class="row"><button class="chip" id="cPick">Pick colour</button><span class="chip" style="background:hsl(${m.colorRange.h},${m.colorRange.s}%,${m.colorRange.v / 2}%)">&nbsp;&nbsp;&nbsp;</span></div><div class="sl" data-g="colorRange.tol" data-min="1" data-max="100" data-step="1"><label>Tolerance</label><input class="val"><input type="range"></div>`; $('#cPick').onclick = () => { S.colorPicking = true; glCanvas.classList.add('pick'); }; }
+  if (m.colorRange) { g.innerHTML = `<div class="subhead">Colour range</div><div class="row"><button class="chip" id="cPick">Pick colour</button><span class="chip" style="background:hsl(${+m.colorRange.h || 0},${+m.colorRange.s || 0}%,${(+m.colorRange.v || 0) / 2}%)">&nbsp;&nbsp;&nbsp;</span></div><div class="sl" data-g="colorRange.tol" data-min="1" data-max="100" data-step="1"><label>Tolerance</label><input class="val"><input type="range"></div>`; $('#cPick').onclick = () => { S.colorPicking = true; glCanvas.classList.add('pick'); }; }
   if (m.type === 'ai' && m.params?.kind === 'sky' && !m.autoSkyMatch) {
     let html = `<div class="subhead">Sky look</div><div class="row" style="flex-wrap:wrap;gap:6px">${SKY_LOOKS.map((s, i) => `<button class="chip" data-sky="${i}">${s.name}</button>`).join('')}</div>`;
     html += `<div class="subhead">Replace sky</div>`;
     if (!S.skyLibrary) { html += `<div class="hint">Loading sky library…</div>`; ensureSkyLibrary().then(() => { if (S.activeMask === m) syncMaskEditor(); }); }
-    else html += `<div class="skygrid">${S.skyLibrary.map(s => `<img class="skythumb${m.sky?.assetId === s.id ? ' on' : ''}" data-skyid="${s.id}" title="${s.name}" src="/api/skies/${s.id}?res=thumb" loading="lazy">`).join('')}</div>`;
+    else html += `<div class="skygrid">${S.skyLibrary.map(s => `<img class="skythumb${m.sky?.assetId === s.id ? ' on' : ''}" data-skyid="${esc(s.id)}" title="${esc(s.name)}" src="/api/skies/${encodeURIComponent(s.id)}?res=thumb" loading="lazy">`).join('')}</div>`;
     g.innerHTML = html;
     $$('[data-sky]', g).forEach(b => b.onclick = () => { const look = SKY_LOOKS[+b.dataset.sky]; m.adj = { ...MASK_ADJ(), ...look.adj }; syncMaskEditor(); commit('Sky look: ' + look.name); requestRender(); });
     $$('[data-skyid]', g).forEach(img => img.onclick = () => pickSky(m, img.dataset.skyid));
@@ -1946,16 +1946,7 @@ function bindDrop() {
     if (!carries(e)) return;
     e.preventDefault(); depth = 0; show(false);
     const paths = pathsFromDrop(e.dataTransfer);
-    if (!paths.length) {
-      // Record exactly what came through so the gap can be diagnosed instead of guessed at.
-      const dt = e.dataTransfer;
-      const report = { types: [...(dt.types || [])], data: {}, files: [] };
-      for (const t of report.types) { try { report.data[t] = (dt.getData(t) || '').slice(0, 400); } catch (err) { report.data[t] = 'getData failed: ' + err.message; } }
-      for (const f of dt.files || []) report.files.push({ name: f.name, size: f.size, type: f.type, rel: f.webkitRelativePath || '' });
-      try { for (const it of dt.items || []) { const en = it.webkitGetAsEntry?.(); if (en) report.files.push({ entry: en.name, dir: en.isDirectory, full: en.fullPath }); } } catch (err) { report.entryError = err.message; }
-      api.send('/api/debug/drop', 'POST', report).catch(() => {});
-      return toast('No filesystem path in that drop — what it carried was saved to ~/.cache/mantiphy/drop-debug.json');
-    }
+    if (!paths.length) return toast('No folder path in that drop — use Import instead');
 
     let added = 0, updated = 0, failed = 0, last = null;
     for (const [i, path] of paths.entries()) {

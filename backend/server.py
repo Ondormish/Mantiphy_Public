@@ -24,7 +24,7 @@ from typing import Any, Optional
 
 import numpy as np
 from fastapi import FastAPI, HTTPException, Query, Request, UploadFile, File, Form
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageOps
 from watchdog.events import FileSystemEventHandler
@@ -78,7 +78,33 @@ THUMB_EDGE = 480
 PREVIEW_EDGE = 2560
 WRITE_SIDECARS = os.environ.get("MANTIPHY_SIDECARS", "1") == "1"
 
+PORT = int(os.environ.get("MANTIPHY_PORT", "7878"))
+
 app = FastAPI(title="Mantiphy")
+
+# ----------------------------------------------------------------------------
+# Local-only guard. Listening on 127.0.0.1 keeps other machines out, but not
+# other web pages open in the user's browser:
+#  - DNS rebinding: a hostile domain that resolves to 127.0.0.1 becomes
+#    "same-origin" with the API — rejected by checking the Host header;
+#  - cross-site requests: a page may POST multipart forms here without a CORS
+#    preflight (e.g. to /api/export, which writes files) — rejected by checking
+#    Origin and, when the browser sends it, Sec-Fetch-Site.
+# ----------------------------------------------------------------------------
+_ALLOWED_HOSTS = {f"127.0.0.1:{PORT}", f"localhost:{PORT}"}
+
+
+@app.middleware("http")
+async def _local_only(request: Request, call_next):
+    if request.headers.get("host") not in _ALLOWED_HOSTS:
+        return PlainTextResponse("Forbidden host", status_code=403)
+    origin = request.headers.get("origin")
+    if origin is not None and origin.split("://", 1)[-1] not in _ALLOWED_HOSTS:
+        return PlainTextResponse("Forbidden origin", status_code=403)
+    if request.headers.get("sec-fetch-site") in ("cross-site", "same-site"):
+        return PlainTextResponse("Forbidden cross-site request", status_code=403)
+    return await call_next(request)
+
 _cpu = os.cpu_count() or 4
 _decode_lock = threading.Semaphore(max(2, _cpu // 2))          # interactive decodes (thumb/preview/full requests)
 _pool = ThreadPoolExecutor(max_workers=4)                       # light async work (sidecars…)
@@ -1433,21 +1459,6 @@ def import_folder(payload: dict):
     return {**scan_folder(folder, bool(payload.get("recursive", True))), "folder": str(folder)}
 
 
-@app.post("/api/debug/drop")
-def debug_drop(payload: dict):
-    """Record what a drag-and-drop actually carried.
-
-    Which flavours a file manager publishes depends on the desktop, the
-    display server and whether a portal sits in between, so when a drop yields
-    no usable path the only way to know why is to look at what arrived."""
-    log = CACHE_DIR / "drop-debug.json"
-    try:
-        log.write_text(json.dumps(payload, indent=1, ensure_ascii=False)[:20000])
-    except OSError:
-        pass
-    return {"ok": True}
-
-
 @app.delete("/api/folders")
 def remove_folder(path: str):
     watch_manager.stop(path)
@@ -1808,7 +1819,7 @@ async def export(file: UploadFile = File(...), dest: str = Form(...), filename: 
         exif_bytes = exif.tobytes()
     ext = {"jpeg": ".jpg", "png": ".png", "webp": ".webp", "tiff": ".tif"}[fmt]
     # Case-insensitively taken, because exporting back into the source folder
-    # must not drop a "COL_1310.jpg" beside an original "COL_1310.JPG" — on a
+    # must not drop a "DSC_0001.jpg" beside an original "DSC_0001.JPG" — on a
     # case-sensitive filesystem that is two files one keystroke apart.
     try:
         taken = {e.name.lower() for e in out_dir.iterdir()}
@@ -2151,9 +2162,21 @@ def _refine_matte(im: Image.Image, prob: np.ndarray, grid: int = 320) -> np.ndar
     return q.astype(np.float32)
 
 
-_SKYSEG_MODEL_URL = "https://huggingface.co/JianyuanWang/skyseg/resolve/main/skyseg.onnx"
+# Pinned to a commit (not "main") and checked against its SHA-256, so a
+# changed upstream file is refused rather than silently run.
+_SKYSEG_MODEL_URL = ("https://huggingface.co/JianyuanWang/skyseg/resolve/"
+                     "3ba8c6df1d9ba9ff26f637c7ba9568ac11a9aa7f/skyseg.onnx")
+_SKYSEG_MODEL_SHA256 = "ab9c34c64c3d821220a2886a4a06da4642ffa14d5b30e8d5339056a089aa1d39"
 _skyseg_sess = None
 _skyseg_failed = False
+
+
+def _check_sha256(data: bytes, expected: str, what: str):
+    """Refuse a downloaded model whose bytes are not the ones this release was
+    tested with — a replaced or corrupted file never gets loaded."""
+    got = hashlib.sha256(data).hexdigest()
+    if got != expected:
+        raise RuntimeError(f"downloaded {what} failed its integrity check (sha256 {got[:12]}…, expected {expected[:12]}…)")
 
 
 def _skyseg_model_path() -> Path:
@@ -2167,6 +2190,7 @@ def _skyseg_model_path() -> Path:
     import urllib.request
     with urllib.request.urlopen(_SKYSEG_MODEL_URL, timeout=120) as resp:
         data = resp.read()
+    _check_sha256(data, _SKYSEG_MODEL_SHA256, "sky model")
     tmp = dest.with_suffix(dest.suffix + ".part")
     tmp.write_bytes(data)
     os.replace(tmp, dest)
@@ -2418,6 +2442,7 @@ _DENOISE_MODEL_URL = (
     "https://github.com/darktable-org/darktable-ai/releases/download/"
     "release-5.6.0/denoise-nind.dtmodel"
 )
+_DENOISE_MODEL_SHA256 = "5d615c5026a3c579455b9082f72b91e109adb54f4125b5b5cde45983bd6776b2"  # the .onnx inside
 _denoise_sess = None
 
 
@@ -2446,8 +2471,10 @@ def _denoise_model_path() -> Path:
         onnx_name = next((n for n in zf.namelist() if n.endswith(".onnx")), None)
         if onnx_name is None:
             raise RuntimeError("downloaded model archive contains no .onnx file")
+        onnx = zf.read(onnx_name)
+        _check_sha256(onnx, _DENOISE_MODEL_SHA256, "denoise model")
         tmp = dest.with_suffix(dest.suffix + ".part")
-        tmp.write_bytes(zf.read(onnx_name))
+        tmp.write_bytes(onnx)
         os.replace(tmp, dest)
     return dest
 
@@ -2583,6 +2610,5 @@ app.mount("/", _NoCacheStatic(directory=str(FRONTEND), html=True), name="fronten
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("MANTIPHY_PORT", "7878"))
-    print(f"\n  Mantiphy  →  http://127.0.0.1:{port}\n  data: {DATA_DIR}\n  cache: {CACHE_DIR}\n")
-    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+    print(f"\n  Mantiphy  →  http://127.0.0.1:{PORT}\n  data: {DATA_DIR}\n  cache: {CACHE_DIR}\n")
+    uvicorn.run(app, host="127.0.0.1", port=PORT, log_level="warning")

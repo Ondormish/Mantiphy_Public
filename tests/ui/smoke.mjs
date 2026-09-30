@@ -112,6 +112,20 @@ const scenarios = {
     assert(!(await page.$(active + ' .fedited')), 'resetting the edit clears the mark');
   },
 
+  async 'markup in file names and EXIF is shown as text, never run'() {
+    await library(); await wait(500);
+    const ran = () => page.evaluate(() => window.__xss);
+    assert(await ran() === undefined, 'injected markup ran in the grid: ' + await ran());
+    const evil = await cell('evil<img');
+    await evil.click(); await wait(400);
+    await evil.click({ button: 'right' }); await wait(200); await page.mouse.click(5, 5);
+    await evil.dblclick(); await wait(2500);                       // Develop: info overlay, metadata, filmstrip
+    await page.keyboard.press('i'); await wait(200);
+    assert(await ran() === undefined, 'injected markup ran: ' + await ran());
+    const shown = await page.$eval('#metaDev', el => el.textContent);
+    assert(shown.includes("onerror=window.__xss='model'"), 'the EXIF model is displayed literally');
+  },
+
   async 'photo menu is the same in the grid, the filmstrip and on the canvas'() {
     await library();
     await (await cell('landscape')).click({ button: 'right' }); await wait(200);

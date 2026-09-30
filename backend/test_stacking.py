@@ -117,7 +117,7 @@ def _stack_endpoint_checks(server, TestClient, tmp):
     shots = tmp / "burst"; shots.mkdir()
     for i, f in enumerate(frames):
         f.save(shots / f"b{i}.jpg", quality=95)
-    client = TestClient(server.app)
+    client = TestClient(server.app, base_url=f"http://127.0.0.1:{server.PORT}")  # the local-only guard checks Host
     r = client.post("/api/import", json={"path": str(shots), "recursive": False})
     assert r.status_code == 200, r.text
     ids = [im["id"] for im in client.get("/api/images", params={"folder": str(shots)}).json()]

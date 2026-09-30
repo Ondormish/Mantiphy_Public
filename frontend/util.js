@@ -14,6 +14,10 @@ const uid = () => Math.random().toString(36).slice(2, 9);
 let toastT; const toast = m => { const t = $('#toast'); t.textContent = m; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2200); };
 const status = m => { $('#status').textContent = m || ''; };
 const loadImg = src => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('Image failed to load')); i.src = src; });
+/** Escape text for use inside HTML markup or a quoted attribute. Everything
+ *  that comes from a photo, a file name or a sidecar goes through this before
+ *  reaching innerHTML — any of those can carry markup. */
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
 
-export { $, $$, api, clamp, deepClone, getPath, setPath, uid, toast, status, loadImg, debounce };
+export { $, $$, api, clamp, deepClone, getPath, setPath, uid, toast, status, loadImg, debounce, esc };

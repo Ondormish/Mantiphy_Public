@@ -1,6 +1,7 @@
 """Generate the synthetic photos the UI smoke tests run against:
 a noisy landscape (sky, ridge line, a dark subject) and a 6-frame burst with a
-red "walker" crossing the frame (for stacking). Usage: python fixtures.py DIR"""
+red "walker" crossing the frame (for stacking), plus a photo whose file name
+and EXIF carry markup (for the XSS check). Usage: python fixtures.py DIR"""
 import sys
 from pathlib import Path
 
@@ -27,6 +28,12 @@ def main(out: Path):
         x = 150 + i * 250
         ImageDraw.Draw(frame).rectangle((x, 850, x + 60, 1050), fill=(200, 30, 30))
         frame.save(out / f"burst_{i}.jpg", quality=92)
+
+    # Hostile photo: anything read from a file must reach the page as text.
+    exif = Image.Exif()
+    exif[0x010F] = "<img src=x onerror=window.__xss='make'>"    # Make
+    exif[0x0110] = "<img src=x onerror=window.__xss='model'>"   # Model
+    img.resize((600, 400)).save(out / "evil<img src=x onerror=window.__xss='name'>.jpg", quality=85, exif=exif)
 
 
 if __name__ == "__main__":

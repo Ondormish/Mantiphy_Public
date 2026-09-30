@@ -94,6 +94,42 @@ The browser is used as a rendering runtime, not as "a website": everything runs 
 - **Presets and synced settings update thumbnails lazily**: a photo's thumbnail shows its new look once it has been opened in Develop.
 - This is a personal project shared as-is. Issues and pull requests are welcome, but there is no support guarantee.
 
+## Privacy (GDPR)
+
+Mantiphy has no account, no telemetry, no analytics and no server of its own: the author receives
+nothing about you or your photos. Everything it stores stays on your computer:
+
+- the catalog (`~/.local/share/mantiphy/`) and caches (`~/.cache/mantiphy/`): file paths, ratings,
+  keywords, edits, thumbnails, and metadata read from your photos — **including GPS coordinates**;
+- a small `.mantiphy.json` sidecar next to each edited photo, and ratings/labels/keywords written into
+  `.xmp` sidecars — keep this in mind before sharing a folder;
+- **exports copy the original's metadata by default (camera, date, GPS…)** — choose *Metadata → None
+  (strip)* in the export dialog before publishing photos whose location should stay private.
+
+The app only goes online in these cases, and each time the service involved sees your IP address:
+
+| When | Who | What is sent |
+|---|---|---|
+| First use of an AI feature | GitHub, Hugging Face, PyTorch Hub | a download request for the model file |
+| Map tab open | OpenStreetMap tile servers | map tile requests, which reveal the areas you look at |
+| `./run.sh` installing packages | PyPI (and the PyTorch / GPU package indexes you choose) | package downloads |
+
+Under the GDPR you are the one processing any personal data in your photos (faces, locations); Mantiphy
+only helps you keep it local. Removing a photo from the library drops its catalog entry, but keeps its
+path on an ignore list (so a re-import skips it) and its cached previews until the cache is cleared;
+deleting the two folders above erases everything Mantiphy knows, sidecars next to photos aside.
+
+## Security
+
+The server listens on `127.0.0.1` only and answers nothing but its own page: requests carrying another
+`Host` (DNS rebinding) or coming from another site (`Origin` / `Sec-Fetch-Site`) are refused, so a web
+page open in your browser cannot read your library or write files through it. Text taken from photos,
+file names and sidecars is escaped before display. Models downloaded by Mantiphy itself are pinned and
+checked against a SHA-256 before use.
+
+Found a vulnerability? Please report it privately through GitHub's *Report a vulnerability* button on
+the repository's Security tab rather than in a public issue.
+
 ## Honest gaps / roadmap
 
 This is a working foundation, not feature parity. The biggest missing pieces, roughly in the order I'd build them:
@@ -110,9 +146,49 @@ Tests: backend unit tests (`backend/test_*.py`), Node unit tests for the edit re
 
 PRs, issues and forks welcome — the codebase is deliberately small (a handful of plain files, no build step) so it's easy to extend.
 
+## Credits
+
+Mantiphy stands on the work of these projects and people — thank you. Models are **not** included in
+this repository: each is downloaded from its official source the first time the feature is used, and
+stays under its own license.
+
+| Used for | Project | Authors | License |
+|---|---|---|---|
+| RAW decoding | [LibRaw](https://www.libraw.org) via [rawpy](https://github.com/letmaik/rawpy) | LibRaw LLC; Maik Riechert | LGPL-2.1 or CDDL-1.0; MIT |
+| Lens correction | [Lensfun](https://lensfun.github.io) via [lensfunpy](https://github.com/letmaik/lensfunpy) | Lensfun contributors; Maik Riechert | LGPL-3.0 (database CC BY-SA 3.0); MIT |
+| AI denoise | [NIND denoiser](https://github.com/trougnouf/nind-denoise) — *[Natural Image Noise Dataset](https://arxiv.org/abs/1906.00270)*, CVPR Workshops 2019; ONNX export by [darktable-ai](https://github.com/darktable-org/darktable-ai) | Benoit Brummer, Christophe De Vleeschouwer; darktable project | GPL-3.0 (training images CC BY 4.0 / CC0) |
+| Subject / people masks | [rembg](https://github.com/danielgatis/rembg) | Daniel Gatis | MIT |
+| Subject mask (standard) | [DIS / IS-Net](https://github.com/xuebinqin/DIS) | Xuebin Qin et al. | Apache-2.0 |
+| People mask (standard) | [U²-Net](https://github.com/xuebinqin/U-2-Net) | Xuebin Qin et al. | Apache-2.0 |
+| Subject / people masks (HQ) | [BiRefNet](https://github.com/ZhengPeng7/BiRefNet) | Peng Zheng et al. | MIT |
+| Sky mask | [Sky-Segmentation-and-Post-processing](https://github.com/xiongzhu666/Sky-Segmentation-and-Post-processing), ONNX [hosted by JianyuanWang](https://huggingface.co/JianyuanWang/skyseg) | xiongzhu666 | MIT |
+| Object removal | [LaMa](https://github.com/advimman/lama) via [simple-lama-inpainting](https://github.com/enesmsahin/simple-lama-inpainting) | Roman Suvorov et al. (Samsung AI Center); enesmsahin | Apache-2.0 |
+| AI runtime | [ONNX Runtime](https://onnxruntime.ai), [PyTorch](https://pytorch.org) | Microsoft; PyTorch Foundation | MIT; BSD-3-Clause |
+| HDR, panorama, colour chart | [OpenCV](https://opencv.org) | OpenCV contributors | Apache-2.0 |
+| Map | [Leaflet](https://leafletjs.com), [Leaflet.markercluster](https://github.com/Leaflet/Leaflet.markercluster), map data [© OpenStreetMap contributors](https://www.openstreetmap.org/copyright) | Volodymyr Agafonkin; David Leaver; OSM contributors | BSD-2-Clause; MIT; ODbL |
+| Server | [FastAPI](https://fastapi.tiangolo.com), [Uvicorn](https://www.uvicorn.org), [Pillow](https://python-pillow.org), [NumPy](https://numpy.org), [ExifRead](https://github.com/ianare/exif-py), [watchdog](https://github.com/gorakhargosh/watchdog) | their contributors | MIT, BSD, Apache-2.0, MIT-CMU |
+
+If you use Mantiphy's denoise results in research, please cite the NIND paper.
+
 ## License
 
-[MIT](LICENSE) — do what you like with it, just keep the copyright notice.
+Mantiphy is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE), with an additional
+permission for photo work (at the top of [LICENSE](LICENSE)).
+
+- **You can** use it, study it, modify it and share it (modified or not) for free, for any
+  noncommercial purpose: personal use, hobby projects, research, education, charities and public
+  institutions. Sharing must include the license and the `Required Notice:` lines from [LICENSE](LICENSE).
+- **You can** also use it for paid work: a professional photographer, a studio or a publisher may import,
+  edit and export images with Mantiphy and sell those images. Your photos are yours.
+- **You cannot** sell the software itself, rent it, sell access to it, or bundle it — modified or not —
+  into a paid product or service, without a separate agreement. For a commercial license, open an issue
+  or contact [@Ondormish](https://github.com/Ondormish).
+
+This is a *source-available* license, not an OSI "open source" one. The very first public version (commit `2b17035`,
+published on 2026-09-30) was released under the MIT license and remains available under MIT.
+
+By contributing (pull request, patch…), you agree that your contribution is licensed under these same
+terms and that the author may also include it in commercially licensed versions of Mantiphy.
 
 The Mantiphy logo (`mantiphy.svg`, `mantiphy.png`, `frontend/icon.png`) was made with [Recraft](https://www.recraft.ai).
 Third-party code bundled in `frontend/vendor/` keeps its own licenses — see [frontend/vendor/LICENSES.md](frontend/vendor/LICENSES.md).

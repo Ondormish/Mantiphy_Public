@@ -138,7 +138,7 @@ def decode(data: bytes) -> np.ndarray:
             tags[tag] = struct.unpack("<%dI" % count, raw)
         else:
             tags[tag] = raw
-    W, H, rps = tags[256][0], tags[257][0], tags[278][0]
+    W, H = tags[256][0], tags[257][0]
     rows = []
     for off, cnt in zip(tags[273], tags[279]):
         diff = np.frombuffer(zlib.decompress(data[off:off + cnt]), "<u2").astype(np.uint32).reshape(-1, W, 3)
