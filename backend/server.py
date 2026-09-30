@@ -56,17 +56,6 @@ DATA_DIR = Path(os.environ.get("MANTIPHY_DATA", Path.home() / ".local/share/mant
 CACHE_DIR = Path(os.environ.get("MANTIPHY_CACHE", Path.home() / ".cache/mantiphy"))
 DB_PATH = DATA_DIR / "catalog.sqlite"
 
-for new_dir, old_dir in ((DATA_DIR, Path.home() / ".local/share/argent"),
-                         (CACHE_DIR, Path.home() / ".cache/argent")):
-    # The app used to be called Argent. Carry an existing catalog and cache over
-    # once, so upgrading doesn't look like everything was lost.
-    if old_dir.is_dir() and not new_dir.exists():
-        try:
-            new_dir.parent.mkdir(parents=True, exist_ok=True)
-            old_dir.rename(new_dir)
-        except OSError:
-            pass
-
 for d in (DATA_DIR, CACHE_DIR / "thumb", CACHE_DIR / "preview", CACHE_DIR / "preview16", CACHE_DIR / "full16", CACHE_DIR / "full", CACHE_DIR / "mask", CACHE_DIR / "heal", CACHE_DIR / "denoise", CACHE_DIR / "skies"):
     d.mkdir(parents=True, exist_ok=True)
 
@@ -604,7 +593,12 @@ def _register_existing_namespaces(p: Path):
     about to ns0/ns1/etc. (verified directly: a Lightroom-style file
     with crs: attributes came back as ns3: without this step)."""
     for _, (prefix, uri) in ET.iterparse(p, events=["start-ns"]):
-        ET.register_namespace(prefix, uri)
+        try:
+            ET.register_namespace(prefix, uri)
+        except ValueError:
+            # ns0, ns1… are reserved by ElementTree, which regenerates
+            # exactly that kind of prefix on output anyway.
+            pass
 
 
 _xmp_write_lock = threading.Lock()
@@ -647,6 +641,11 @@ def write_xmp_sidecar(row: dict):
                     tree = desc = None
                     all_descs = []
 
+            if desc is None and p.exists():
+                # Unreadable, or no rdf:Description to merge into: leave
+                # another tool's file untouched rather than replace it.
+                print(f"XMP: {p.name} could not be merged into, left unchanged", file=sys.stderr)
+                return
             if desc is None:
                 root = ET.Element("{adobe:ns:meta/}xmpmeta")
                 rdf = ET.SubElement(root, f"{{{XMP_NS['rdf']}}}RDF")
@@ -864,11 +863,56 @@ def _trash_dir() -> Path:
     return Path(xdg) / "Trash"
 
 
+def _same_fs(a: Path, b: Path) -> bool:
+    return a.stat().st_dev == b.stat().st_dev
+
+
+def _mount_top(p: Path) -> Path:
+    d = p.resolve().parent
+    while not os.path.ismount(d) and d != d.parent:
+        d = d.parent
+    return d
+
+
+def _trash_for(p: Path) -> tuple[Path, Optional[Path]]:
+    """Trash directory for p, and the directory its .trashinfo Path is
+    relative to (None: absolute), per the freedesktop.org Trash spec.
+
+    A file on another filesystem than the home trash (a NAS share, a second
+    disk) goes to that filesystem's own $topdir/.Trash/$uid or
+    $topdir/.Trash-$uid — the ones file managers use — instead of being
+    copied whole into the home folder. When that filesystem has no usable
+    trash and none can be created, the home trash is the fallback."""
+    home = _trash_dir()
+    home.mkdir(parents=True, exist_ok=True)
+    try:
+        if _same_fs(p, home):
+            return home, None
+        top, uid = _mount_top(p), os.getuid()
+        shared = top / ".Trash"
+        try:
+            st = os.lstat(shared)
+            import stat as _stat
+            if _stat.S_ISDIR(st.st_mode) and st.st_mode & _stat.S_ISVTX:   # sticky, not a symlink
+                own = shared / str(uid)
+                own.mkdir(mode=0o700, exist_ok=True)
+                return own, top
+        except OSError:
+            pass
+        own = top / f".Trash-{uid}"
+        own.mkdir(mode=0o700, exist_ok=True)
+        if not own.is_symlink() and os.access(own, os.W_OK):
+            return own, top
+    except OSError:
+        pass
+    return home, None
+
+
 def move_to_trash(p: Path) -> Path:
-    """Move a file to the user's trash (freedesktop.org Trash spec: files/ plus a
+    """Move a file to the trash (freedesktop.org Trash spec: files/ plus a
     .trashinfo record), so "Delete from disk" can be undone from the file manager.
     Returns the file's new location."""
-    trash = _trash_dir()
+    trash, rel_to = _trash_for(p)
     (trash / "files").mkdir(parents=True, exist_ok=True)
     (trash / "info").mkdir(parents=True, exist_ok=True)
     name, n = p.name, 1
@@ -876,8 +920,10 @@ def move_to_trash(p: Path) -> Path:
         n += 1
         name = f"{p.stem}.{n}{p.suffix}"
     from urllib.parse import quote
+    orig = p.resolve()
+    shown = orig.relative_to(rel_to) if rel_to is not None else orig
     (trash / "info" / (name + ".trashinfo")).write_text(
-        "[Trash Info]\nPath=" + quote(str(p.resolve())) + "\nDeletionDate=" + time.strftime("%Y-%m-%dT%H:%M:%S") + "\n")
+        "[Trash Info]\nPath=" + quote(str(shown)) + "\nDeletionDate=" + time.strftime("%Y-%m-%dT%H:%M:%S") + "\n")
     dest = trash / "files" / name
     shutil.move(str(p), str(dest))
     return dest
@@ -1586,8 +1632,30 @@ def get_image(iid: str):
     return row_to_dict(r)
 
 
+_FLAGS = {"", "pick", "reject"}
+
+
+def _check_changes(payload: dict):
+    """Reject values the catalog and the UI cannot represent (a rating of
+    999999999 used to reach the grid and break it)."""
+    if "rating" in payload:
+        r = payload["rating"]
+        if isinstance(r, bool) or not isinstance(r, int) or not 0 <= r <= 5:
+            raise HTTPException(400, "rating must be an integer from 0 to 5")
+    if "flag" in payload and payload["flag"] not in _FLAGS:
+        raise HTTPException(400, "flag must be '', 'pick' or 'reject'")
+    if "label" in payload and payload["label"] not in _XMP_LABELS | {""}:
+        raise HTTPException(400, "label must be '' or one of " + ", ".join(sorted(_XMP_LABELS)))
+    if "keywords" in payload and not isinstance(payload["keywords"], str):
+        raise HTTPException(400, "keywords must be a string")
+    if "edits" in payload and not isinstance(payload["edits"], dict):
+        raise HTTPException(400, "edits must be an object")
+
+
 @app.patch("/api/image/{iid}")
 def patch_image(iid: str, payload: dict):
+    _check_changes(payload)
+    _row(iid)  # 404 for an unknown id
     allowed = {"rating", "flag", "label", "keywords", "edits"}
     sets, args = [], []
     for k, v in payload.items():
@@ -1609,6 +1677,9 @@ def patch_image(iid: str, payload: dict):
 @app.post("/api/images/batch")
 def batch_patch(payload: dict):
     ids, changes = payload.get("ids", []), payload.get("changes", {})
+    _check_changes(changes)
+    for iid in ids:  # all or nothing: validate every id before touching any
+        _row(iid)
     out = []
     for iid in ids:
         out.append(patch_image(iid, changes))
@@ -1771,6 +1842,56 @@ def delete_preset(pid: int):
 # ----------------------------------------------------------------------------
 # Export sink: the browser renders the final pixels on the GPU and posts them
 # ----------------------------------------------------------------------------
+_EXPORT_EXT = {"jpeg": ".jpg", "png": ".png", "webp": ".webp", "tiff": ".tif"}
+
+
+def _export_dir(dest: str, subfolder: str) -> Path:
+    """Destination folder, created if needed. The subfolder field is kept
+    inside it: a name like "../.." or an absolute path there would silently
+    escape the destination the user chose."""
+    out_dir = Path(dest).expanduser()
+    if subfolder.strip():
+        safe = "/".join(part for part in Path(subfolder.strip()).parts
+                        if part not in ("", ".", "..", "/") and ":" not in part)
+        if safe:
+            out_dir = out_dir / safe
+    out_dir.mkdir(parents=True, exist_ok=True)
+    return out_dir
+
+
+def _export_target(out_dir: Path, stem: str, ext: str, on_existing: str, metadata_src: str) -> tuple[Path, bool]:
+    """Where to write an export, and whether to skip it — Lightroom's
+    Existing Files choice (ask / rename / overwrite / skip).
+
+    Names are compared case-insensitively, because exporting back into the
+    source folder must not drop a "DSC_0001.jpg" beside an original
+    "DSC_0001.JPG" — on a case-sensitive filesystem that is two files one
+    keystroke apart. And the photo being exported is never written over,
+    whatever the policy says: that would destroy the original to produce a
+    copy of it."""
+    try:
+        entries = list(out_dir.iterdir())
+    except OSError:
+        entries = []
+    taken = {e.name.lower() for e in entries}
+    out = out_dir / (stem + ext)
+    if out.name.lower() not in taken:
+        return out, False
+    clashes = [e for e in entries if e.name.lower() == out.name.lower()]
+    src = Path(metadata_src).expanduser().resolve() if metadata_src else None
+    if src is None or not any(e.resolve() == src for e in clashes):
+        if on_existing == "skip":
+            return out, True
+        if on_existing == "ask":
+            raise HTTPException(409, f"{out.name} already exists in {out_dir}")
+        if on_existing == "overwrite":
+            return clashes[0], False  # the existing file's own casing
+    n, cand = 1, out
+    while cand.name.lower() in taken:
+        cand = out_dir / f"{stem}-{n}{ext}"; n += 1
+    return cand, False
+
+
 @app.post("/api/export")
 async def export(file: UploadFile = File(...), dest: str = Form(...), filename: str = Form(...), fmt: str = Form("jpeg"),
                  quality: int = Form(92), long_edge: int = Form(0), sharpen: int = Form(0), metadata_src: str = Form(""),
@@ -1782,15 +1903,9 @@ async def export(file: UploadFile = File(...), dest: str = Form(...), filename: 
     panel: "Put in Subfolder", and the Existing Files choice between asking,
     picking a new name, overwriting, and skipping.
     """
-    out_dir = Path(dest).expanduser()
-    if subfolder.strip():
-        # One component only: a name like "../.." or an absolute path in this
-        # field would silently escape the destination the user chose.
-        safe = "/".join(part for part in Path(subfolder.strip()).parts
-                        if part not in ("", ".", "..", "/") and ":" not in part)
-        if safe:
-            out_dir = out_dir / safe
-    out_dir.mkdir(parents=True, exist_ok=True)
+    if fmt not in _EXPORT_EXT:
+        raise HTTPException(400, "fmt must be one of " + ", ".join(_EXPORT_EXT))
+    out_dir = _export_dir(dest, subfolder)
     data = await file.read()
     im = Image.open(io.BytesIO(data)).convert("RGB")
     if long_edge and max(im.size) > long_edge:
@@ -1817,42 +1932,9 @@ async def export(file: UploadFile = File(...), dest: str = Form(...), filename: 
         if keywords:
             exif[0x9C9E] = keywords.encode("utf-16-le") + b"\x00\x00"  # Windows XP Keywords
         exif_bytes = exif.tobytes()
-    ext = {"jpeg": ".jpg", "png": ".png", "webp": ".webp", "tiff": ".tif"}[fmt]
-    # Case-insensitively taken, because exporting back into the source folder
-    # must not drop a "DSC_0001.jpg" beside an original "DSC_0001.JPG" — on a
-    # case-sensitive filesystem that is two files one keystroke apart.
-    try:
-        taken = {e.name.lower() for e in out_dir.iterdir()}
-    except OSError:
-        taken = set()
-    stem = Path(filename).stem
-    out = out_dir / (stem + ext)
-
-    def free_name() -> Path:
-        n, cand = 1, out
-        while cand.name.lower() in taken:
-            cand = out_dir / f"{stem}-{n}{ext}"; n += 1
-        return cand
-
-    if out.name.lower() in taken:
-        # Never write over the photo being exported, whatever the policy says:
-        # that would destroy the original to produce a copy of it.
-        src = Path(metadata_src).expanduser().resolve() if metadata_src else None
-        clash_is_source = src is not None and any(
-            e.resolve() == src for e in out_dir.iterdir() if e.name.lower() == out.name.lower())
-        if clash_is_source:
-            out = free_name()
-        elif on_existing == "skip":
-            return {"skipped": True, "path": str(out)}
-        elif on_existing == "ask":
-            raise HTTPException(409, f"{out.name} already exists in {out_dir}")
-        elif on_existing == "overwrite":
-            for e in out_dir.iterdir():
-                if e.name.lower() == out.name.lower():
-                    out = e  # match the existing file's own casing
-                    break
-        else:
-            out = free_name()
+    out, skip = _export_target(out_dir, Path(filename).stem, _EXPORT_EXT[fmt], on_existing, metadata_src)
+    if skip:
+        return {"skipped": True, "path": str(out)}
     kw: dict[str, Any] = {}
     if fmt == "jpeg":
         kw = {"quality": quality, "subsampling": 0 if quality >= 90 else 2, "optimize": True}
@@ -1893,26 +1975,10 @@ async def export16(file: UploadFile = File(...), width: int = Form(...), height:
     arr = np.frombuffer(data, "<u2").reshape(height, width, 3)
     if sharpen:
         arr = _unsharp16(arr, sharpen / 100 * 1.2)
-    out_dir = Path(dest).expanduser()
-    if subfolder.strip():
-        safe = "/".join(part for part in Path(subfolder.strip()).parts if part not in ("", ".", "..", "/") and ":" not in part)
-        if safe:
-            out_dir = out_dir / safe
-    out_dir.mkdir(parents=True, exist_ok=True)
-    stem = Path(filename).stem
-    out = out_dir / (stem + ".tif")
-    taken = {e.name.lower() for e in out_dir.iterdir()}
-    if out.name.lower() in taken:
-        src = Path(metadata_src).expanduser().resolve() if metadata_src else None
-        clash_is_source = src is not None and any(e.resolve() == src for e in out_dir.iterdir() if e.name.lower() == out.name.lower())
-        if on_existing == "skip" and not clash_is_source:
-            return {"skipped": True, "path": str(out)}
-        if on_existing == "ask" and not clash_is_source:
-            raise HTTPException(409, f"{out.name} already exists in {out_dir}")
-        if on_existing != "overwrite" or clash_is_source:
-            n = 1
-            while out.name.lower() in taken:
-                out = out_dir / f"{stem}-{n}.tif"; n += 1
+    out_dir = _export_dir(dest, subfolder)
+    out, skip = _export_target(out_dir, Path(filename).stem, ".tif", on_existing, metadata_src)
+    if skip:
+        return {"skipped": True, "path": str(out)}
     meta = {"copyright": copyright}
     if metadata_mode != "none" and metadata_src:
         try:

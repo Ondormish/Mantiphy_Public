@@ -68,6 +68,44 @@ def test_trash_name_collisions_get_a_suffix():
     assert first != second and first.exists() and second.exists()
 
 
+def _on_other_disk(top: Path, fn):
+    """Run fn() as if files lived on another filesystem mounted at top."""
+    saved = server._same_fs, server._mount_top
+    server._same_fs, server._mount_top = (lambda a, b: False), (lambda p: top)
+    try:
+        fn()
+    finally:
+        server._same_fs, server._mount_top = saved
+
+
+def test_other_disk_uses_its_own_trash_not_the_home_one():
+    top = Path(tempfile.mkdtemp())
+    photo = top / "shoot" / "DSC_0001.NEF"; photo.parent.mkdir(); photo.write_bytes(b"raw")
+
+    def body():
+        dest = server.move_to_trash(photo)
+        assert dest == top / f".Trash-{os.getuid()}" / "files" / "DSC_0001.NEF", dest
+        info = (dest.parent.parent / "info" / "DSC_0001.NEF.trashinfo").read_text()
+        assert "\nPath=shoot/DSC_0001.NEF\n" in info, info   # relative to the disk's top
+    _on_other_disk(top, body)
+
+
+def test_unwritable_other_disk_falls_back_to_the_home_trash():
+    top = Path(tempfile.mkdtemp())
+    photo = top / "DSC_0002.NEF"; photo.write_bytes(b"raw")
+    home_trash = Path(tempfile.mkdtemp()) / "Trash"
+    saved = server._trash_dir
+    server._trash_dir = lambda: home_trash
+    top.chmod(0o500)                     # like a share whose root is read-only
+    try:
+        got = []
+        _on_other_disk(top, lambda: got.append(server._trash_for(photo)))
+        assert got == [(home_trash, None)], got
+    finally:
+        top.chmod(0o700)
+        server._trash_dir = saved
+
+
 def _with_temp_catalog(fn):
     """Run fn(root) against a throwaway catalog/cache (patches server globals)."""
     root = Path(tempfile.mkdtemp())
@@ -128,6 +166,8 @@ if __name__ == "__main__":
     test_delete_from_disk_goes_to_trash_with_sidecars_and_copies()
     test_deleting_a_virtual_copy_from_disk_never_touches_the_file()
     test_trash_name_collisions_get_a_suffix()
+    test_other_disk_uses_its_own_trash_not_the_home_one()
+    test_unwritable_other_disk_falls_back_to_the_home_trash()
     test_removed_photos_stay_out_of_reimports_until_restored()
     test_removing_the_folder_forgets_its_ignore_list()
     print("OK")

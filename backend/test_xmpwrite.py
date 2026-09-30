@@ -113,17 +113,38 @@ def test_clearing_keywords_removes_the_subject_element_entirely():
     assert result is None or "keywords" not in result, result
 
 
-def test_corrupt_existing_xmp_falls_back_to_fresh_packet():
+def test_unreadable_existing_xmp_is_left_untouched():
+    """A file another tool wrote but that cannot be parsed, or has no
+    rdf:Description to merge into, must survive byte for byte: replacing it
+    would destroy that tool's data (e.g. Lightroom develop settings)."""
+    d = tempfile.mkdtemp()
+    for name, body in {
+        "malformed": '<x:xmpmeta xmlns:x="adobe:ns:meta/"><crs:Exposure>+0.50</crs:Exposure',
+        "no_description": '<x:xmpmeta xmlns:x="adobe:ns:meta/" xmlns:crs="http://ns.adobe.com/camera-raw-settings/1.0/">'
+                          '<crs:Exposure>+0.50</crs:Exposure></x:xmpmeta>',
+    }.items():
+        photo = Path(d) / f"{name}.NEF"
+        photo.write_bytes(b"fake raw")
+        xmp = xmp_sidecar_path(photo)
+        xmp.write_text(body)
+        write_xmp_sidecar(_row(photo, rating=2))  # must not raise
+        assert xmp.read_text() == body, name
+
+
+def test_reserved_ns_prefix_is_merged_not_dropped():
+    """ElementTree refuses to register ns0-style prefixes; that must not make
+    the whole file unreadable (and so skipped or lost)."""
     d = tempfile.mkdtemp()
     photo = Path(d) / "shot.NEF"
     photo.write_bytes(b"fake raw")
     xmp = xmp_sidecar_path(photo)
-    xmp.write_text("not valid xml <<<")
-
-    write_xmp_sidecar(_row(photo, rating=2))  # must not raise
-
-    result = read_xmp_sidecar(xmp)
-    assert result["rating"] == 2, result
+    xmp.write_text('<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">'
+                   '<rdf:Description xmlns:ns0="http://ns.adobe.com/camera-raw-settings/1.0/" ns0:Exposure="+0.50"/>'
+                   '</rdf:RDF></x:xmpmeta>')
+    write_xmp_sidecar(_row(photo, rating=3))
+    text = xmp.read_text()
+    assert 'Exposure="+0.50"' in text, text
+    assert read_xmp_sidecar(xmp)["rating"] == 3
 
 
 def test_write_sidecars_disabled_writes_nothing():
@@ -234,7 +255,8 @@ if __name__ == "__main__":
     test_reject_flag_writes_negative_one_rating()
     test_pick_flag_writes_no_distinct_rating_value()
     test_clearing_keywords_removes_the_subject_element_entirely()
-    test_corrupt_existing_xmp_falls_back_to_fresh_packet()
+    test_unreadable_existing_xmp_is_left_untouched()
+    test_reserved_ns_prefix_is_merged_not_dropped()
     test_write_sidecars_disabled_writes_nothing()
     test_full_roundtrip_rating_label_and_keywords()
     test_clearing_a_preexisting_rating_actually_removes_the_attribute()

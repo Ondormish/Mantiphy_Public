@@ -274,14 +274,14 @@ async function refreshImages() {
   renderGrid(); renderFilmstrip(); renderMeta();
 }
 function cellHtml(im, film = false) {
-  const stars = im.rating ? '★'.repeat(im.rating) : '';
+  const stars = '★'.repeat(clamp(im.rating | 0, 0, 5));
   return `<img loading="lazy" src="/api/image/${esc(im.id)}/thumb${im.esig ? '?v=' + esc(im.esig) : ''}" onload="this.classList.add('ld')" alt="">
     ${im.flag ? `<span class="flag ${esc(im.flag)}"></span>` : ''}${LABELS[im.label] ? `<span class="lbl" style="background:${LABELS[im.label]}"></span>` : ''}${im.copy_of ? `<span class="edited" style="left:4px;right:auto">Copy ${esc(im.copy_index)}</span>` : ''}
     ${film ? (im.edited ? '<span class="fedited" title="Edited"></span>' : '') : `<span class="rawtag">${esc(im.ext.toUpperCase())}</span>${im.edited ? '<span class="edited">edited</span>' : ''}<div class="meta"><span class="stars">${stars}</span><span>${esc(im.filename)}</span></div>`}`;
 }
 function groupKey(im) {
-  // deux fichiers sont deux versions d'une meme prise s'ils partagent l'instant de capture
-  // (RAW+JPEG, ou original + export retouche) ; a defaut, meme nom de base dans le meme dossier
+  // Two files are versions of one shot when they share a capture time (RAW+JPEG,
+  // or an original and its edited export); failing that, the same base name in one folder.
   return im.captured ? 'c:' + im.captured : 'n:' + im.folder + '/' + im.filename.replace(/\.[^.]+$/, '');
 }
 function gridItems() {
@@ -458,7 +458,7 @@ async function applyToSelection(partial, label) {
   toast(`${label} \u2192 ${ids.length} photo${ids.length > 1 ? 's' : ''}`);
 }
 
-// ---- menu contextuel -----------------------------------------------------------
+// ---- context menu --------------------------------------------------------------
 function closeCtx() { $('#ctxmenu').classList.add('hidden'); }
 function showCtx(x, y, title, items) {
   const m = $('#ctxmenu'); m.innerHTML = (title ? `<div class="hd" title="${esc(title)}">${esc(title)}</div>` : '') +

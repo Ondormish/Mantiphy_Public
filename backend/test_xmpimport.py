@@ -13,7 +13,6 @@ from backend.server import (
     read_xmp_sidecar,
     read_sidecar,
     sidecar_path,
-    xmp_sidecar_path,
     lightroom_xmp_sidecar_path,
 )
 

@@ -105,7 +105,6 @@ def test_ai_mask_sky_cache_key_distinguishes_ai_from_heuristic():
     """kind=sky must use a different cache filename depending on whether
     the model file is present on disk, so an AI-produced mask never
     conflates with a previously-cached heuristic one."""
-    from pathlib import Path
     model_path = server.CACHE_DIR / "models" / "skyseg.onnx"
     # CACHE_DIR is the user's real cache: set a downloaded model aside and put it
     # back afterwards rather than deleting it.

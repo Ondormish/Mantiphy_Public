@@ -12,7 +12,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from backend.server import decode, decode16, fit16, ensure_preview16, CACHE_DIR
+from backend.server import decode, decode16, fit16, ensure_preview16
 
 
 def test_decode_unchanged_still_returns_uint8():
