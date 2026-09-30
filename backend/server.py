@@ -69,6 +69,13 @@ WRITE_SIDECARS = os.environ.get("MANTIPHY_SIDECARS", "1") == "1"
 
 PORT = int(os.environ.get("MANTIPHY_PORT", "7878"))
 
+# OpenCV (HDR, panorama, stacking, colour chart) must not load an OpenCL
+# driver: Mesa's rusticl brings its own LLVM, and once onnxruntime-migraphx has
+# loaded the LLVM built into MIGraphX the two collide ("LLVM ERROR: Option
+# 'basic' already exists!") and abort the whole server. These operations run
+# fine on the CPU. Set before cv2 is first imported; OpenCV reads it lazily.
+os.environ.setdefault("OPENCV_OPENCL_RUNTIME", "disabled")
+
 app = FastAPI(title="Mantiphy")
 
 # ----------------------------------------------------------------------------
