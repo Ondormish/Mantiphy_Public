@@ -1,0 +1,9 @@
+# Optional: camera colour profile calibration (Calibrate camera profile
+# from this photo… in the Library grid's right-click menu, single
+# photo only). Uses OpenCV's cv2.mcc ColorChecker detector module.
+# Version floor is stricter than requirements-hdr.txt/
+# requirements-panorama.txt (opencv-python-headless>=4.9) because
+# cv2.mcc's availability in the plain (non-contrib) package below 5.0
+# is unverified — public docs describe mcc as historically
+# contrib-only; empirically confirmed present in 5.0.0.93.
+opencv-python-headless>=5.0

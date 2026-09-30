@@ -1,0 +1,25 @@
+# Virtual environment (created by run.sh)
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Local data and caches
+.cache/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# Browser profile used by the app-mode window
+chrome-profile/
+
+# UI test dependencies
+tests/ui/node_modules/
+tests/ui/package-lock.json
+
+# Misc
+.DS_Store
+*.log

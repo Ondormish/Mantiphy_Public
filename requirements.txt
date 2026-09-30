@@ -1,0 +1,9 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+rawpy>=0.21
+Pillow>=10
+numpy>=1.26
+exifread>=3.0
+lensfunpy>=1.18
+python-multipart>=0.0.9
+watchdog>=4.0

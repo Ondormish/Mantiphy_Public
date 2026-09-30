@@ -1,0 +1,4 @@
+# Optional: AI subject / background masks, and AI denoise (shares onnxruntime;
+# the denoise-nind ONNX model itself downloads on first use, not via pip).
+rembg>=2.0.50
+onnxruntime>=1.17

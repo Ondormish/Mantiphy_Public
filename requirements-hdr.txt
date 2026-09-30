@@ -1,0 +1,4 @@
+# Optional: HDR exposure-fusion merging (Merge to HDR… in the Library
+# grid's right-click menu). Only OpenCV is needed — unlike
+# requirements-inpaint.txt, this does NOT pull in torch.
+opencv-python-headless>=4.9

@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Mantiphy
+GenericName=RAW Photo Editor
+GenericName[fr]=Éditeur RAW
+Comment=Photo library and non-destructive RAW editor
+Comment[fr]=Photothèque et éditeur RAW non destructif
+Exec=run.sh
+Icon=mantiphy
+Terminal=false
+Categories=Graphics;2DGraphics;RasterGraphics;Photography;
+Keywords=photo;raw;lightroom;catalog;develop;retouche;catalogue;
+StartupWMClass=127.0.0.1__7878

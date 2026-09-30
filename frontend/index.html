@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Mantiphy</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="vendor/leaflet.css">
+<link rel="stylesheet" href="vendor/MarkerCluster.css">
+<link rel="stylesheet" href="vendor/MarkerCluster.Default.css">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" type="image/png" href="icon.png">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M7 4h4v16H7z"/><path d="M13 4h4v16h-4z"/></symbol>
+    <symbol id="i-prev" viewBox="0 0 24 24"><path d="M15 4l-8 8 8 8"/></symbol>
+    <symbol id="i-next" viewBox="0 0 24 24"><path d="M9 4l8 8-8 8"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+    <symbol id="i-coll" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/></symbol>
+    <symbol id="i-smart" viewBox="0 0 24 24"><path d="M3 4h18l-7 9v6l-4 2v-8z"/></symbol>
+    <symbol id="i-crop" viewBox="0 0 24 24"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></symbol>
+    <symbol id="i-mask" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18"/><path d="M12 7a5 5 0 0 0 0 10"/></symbol>
+    <symbol id="i-linear" viewBox="0 0 24 24"><path d="M4 20L20 4"/><path d="M4 14l10-10"/><path d="M10 20L20 10"/></symbol>
+    <symbol id="i-radial" viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="9" ry="6"/><ellipse cx="12" cy="12" rx="4" ry="2.5"/></symbol>
+    <symbol id="i-brush" viewBox="0 0 24 24"><path d="M9.06 11.9l8.07-8.06a2.85 2.85 0 1 1 4.03 4.03l-8.06 8.08"/><path d="M7.07 14.94c-1.66 0-3 1.35-3 3.02 0 1.33-2.5 1.52-2 2.02 1.08 1.1 2.49 2.02 4 2.02 2.2 0 4-1.8 4-4.04a3.01 3.01 0 0 0-3-3.02z"/></symbol>
+    <symbol id="i-lum" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></symbol>
+    <symbol id="i-color" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10c0-2-2-2-3-2h-2a2 2 0 0 1-2-2V6c0-1 0-4-3-4z"/><circle cx="7.5" cy="10.5" r="1"/><circle cx="12" cy="7.5" r="1"/><circle cx="16.5" cy="13.5" r="1"/></symbol>
+    <symbol id="i-subject" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></symbol>
+    <symbol id="i-people" viewBox="0 0 24 24"><circle cx="9" cy="7" r="3"/><path d="M3 21c0-3.5 2.7-6 6-6s6 2.5 6 6"/><circle cx="17" cy="8" r="2.5"/><path d="M13.5 21c.3-3 2.2-5 4.5-5s4.2 2 4.5 5"/></symbol>
+    <symbol id="i-sky" viewBox="0 0 24 24"><path d="M17.5 19a4.5 4.5 0 1 0-1.1-8.86A6 6 0 0 0 5 12a4 4 0 0 0 1 7.87z"/></symbol>
+    <symbol id="i-bg" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="10" r="3"/><path d="M6 21c0-3 2.7-5 6-5s6 2 6 5"/></symbol>
+    <symbol id="i-export" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></symbol>
+    <symbol id="i-import" viewBox="0 0 24 24"><path d="M12 15V3"/><path d="M7 8l5-5 5 5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></symbol>
+    <symbol id="i-watch" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></symbol>
+    <symbol id="i-flipH" viewBox="0 0 24 24"><path d="M12 3v18"/><path d="M8 7L4 12l4 5"/><path d="M16 7l4 5-4 5"/></symbol>
+    <symbol id="i-flipV" viewBox="0 0 24 24"><path d="M3 12h18"/><path d="M7 8l5-4 5 4"/><path d="M7 16l5 4 5-4"/></symbol>
+    <symbol id="i-stack" viewBox="0 0 24 24"><rect x="7" y="3" width="14" height="14" rx="2"/><path d="M17 21H5a2 2 0 0 1-2-2V7"/></symbol>
+    <symbol id="i-heal" viewBox="0 0 24 24"><path d="M4 20L20 4"/><path d="M15 4l5 5-4.5 4.5a3.2 3.2 0 0 1-4.5 0v0a3.2 3.2 0 0 1 0-4.5z"/><path d="M6 15l3 3"/></symbol>
+    <symbol id="i-clone" viewBox="0 0 24 24"><circle cx="7" cy="17" r="4"/><circle cx="17" cy="7" r="4"/><path d="M10 14l4-4" stroke-dasharray="2 2"/></symbol>
+  </defs>
+</svg>
+
+<div id="app">
+  <div id="topbar">
+    <span class="wordmark"><img src="icon.png" alt="">Mantiphy</span>
+    <div class="tabs">
+      <button data-mod="library" class="on">Library<kbd>G</kbd></button>
+      <button data-mod="develop">Develop<kbd>D</kbd></button>
+      <button data-mod="map">Map</button>
+    </div>
+    <span class="status" id="status"></span>
+    <span class="grow"></span>
+    <input id="search" type="text" placeholder="Search filename, camera, lens, keywords">
+    <div class="seg" id="ratingFilter" title="Minimum rating">
+      <button data-v="0" class="on">All</button><button data-v="1">★1+</button><button data-v="3">★3+</button><button data-v="5">★5</button>
+    </div>
+    <div class="seg" id="flagFilter" title="Flag filter">
+      <button data-v="" class="on">Any</button><button data-v="pick">Picks</button><button data-v="reject">Rejects</button><button data-v="edited">Edited</button>
+    </div>
+    <button class="tb" id="stackBtn" title="Group versions of the same shot (RAW+JPEG, edited copies)"><svg><use href="#i-stack"/></svg>Stack</button>
+    <select id="sortBy" title="Sort order">
+      <option value="captured">Capture date</option>
+      <option value="folder">Folder</option>
+      <option value="filename">File name</option>
+      <option value="rating">Rating</option>
+      <option value="mtime">Date modified</option>
+      <option value="updated">Recently edited</option>
+    </select>
+    <button class="tb" id="sortDir" title="Reverse sort order">↑</button>
+    <span class="counter" id="counter">0 photos</span>
+    <button class="tb" id="shortcutsBtn" title="Keyboard shortcuts">?</button>
+    <button class="tb primary" id="exportBtn"><svg><use href="#i-export"/></svg>Export</button>
+  </div>
+
+  <aside id="left">
+    <section class="panel" id="pFolders">
+      <header><span class="chev"></span>Folders<button class="reset" id="importBtn">+ Import</button></header>
+      <div class="body"><div class="tree" id="folderTree"></div></div>
+    </section>
+    <section class="panel" id="pCollections">
+      <header><span class="chev"></span>Collections<button class="reset" id="newSmartCollBtn" title="Save the current filters as a Smart Collection">+ Smart</button><button class="reset" id="newCollBtn">+ New</button></header>
+      <div class="body"><div class="tree" id="collTree"></div>
+        <div class="row"><button class="chip" id="addToCollBtn">Add selection to collection…</button></div>
+      </div>
+    </section>
+    <section class="panel" id="pPresets">
+      <header><span class="chev"></span>Presets<button class="reset" id="savePresetBtn">+ Save</button></header>
+      <div class="body"><div id="presetList"></div></div>
+    </section>
+    <section class="panel" id="pHistory">
+      <header><span class="chev"></span>History<button class="reset" id="resetAllBtn">Reset all</button></header>
+      <div class="body"><div class="hist" id="historyList"></div></div>
+    </section>
+    <section class="panel" id="pSnapshots">
+      <header><span class="chev"></span>Snapshots<button class="reset" id="saveSnapshotBtn">+ Save</button></header>
+      <div class="body"><div class="hist" id="snapshotList"></div></div>
+    </section>
+    <section class="panel" id="pSnap">
+      <header><span class="chev"></span>Copy &amp; sync</header>
+      <div class="body hint">
+        <div class="row"><button class="chip" id="copyBtn">Copy settings</button><button class="chip" id="pasteBtn">Paste</button><button class="chip" id="syncBtn">Sync to selection</button></div>
+        Paste applies tone, colour, detail and effects. Crop and masks stay per photo.
+      </div>
+    </section>
+  </aside>
+
+  <main id="center">
+    <div id="grid"></div>
+    <div id="mapView" class="hidden"></div>
+    <div id="loupe" class="hidden">
+      <canvas id="gl"></canvas>
+      <div id="overlay"></div>
+      <div id="brushcursor"></div><div id="clonesource"></div>
+      <div id="info" class="hidden"></div>
+      <div class="spinner" id="spinner"></div>
+      <div class="loupe-bar">
+        <span id="loupeName"></span>
+        <span id="presetPreviewTag" class="hidden"></span>
+        <span class="grow"></span>
+        <span class="zoom">
+          <button data-z="fit" class="on">Fit</button><button data-z="1">1:1</button><button data-z="2">2:1</button>
+        </span>
+        <span id="zoomPct">100%</span>
+      </div>
+    </div>
+    <div class="toast" id="toast"></div>
+  </main>
+
+  <aside id="right">
+    <!-- Library: metadata -->
+    <div id="rightLibrary">
+      <section class="panel">
+        <header><span class="chev"></span>Quick actions</header>
+        <div class="body">
+          <div class="row" id="quickSelect">
+            <button class="chip" id="selAllBtn">Select all <span class="kbd">Ctrl A</span></button>
+            <button class="chip" id="selNoneBtn">Select none <span class="kbd">Esc</span></button>
+            <span class="counter" id="selCount"></span>
+          </div>
+          <div class="row" id="quickRating"></div>
+          <div class="row" id="quickFlags"></div>
+          <div class="row" id="quickLabels"></div>
+          <div class="subhead">Apply to selection</div>
+          <div class="row"><select id="batchPreset" style="width:100%"></select></div>
+          <div class="row"><button class="chip" id="batchPasteBtn">Paste copied settings</button><button class="chip" id="batchResetBtn">Reset edits</button></div>
+          <div class="row"><input type="text" id="keywords" placeholder="Keywords, comma separated" style="width:100%"></div>
+          <div class="row"><label style="display:flex;gap:8px;align-items:center;color:var(--text-dim);font-size:12px;width:100%">Thumbnail size <input type="range" id="cellSize" min="120" max="420" value="200" style="flex:1"></label></div>
+        </div>
+      </section>
+      <section class="panel">
+        <header><span class="chev"></span>Metadata</header>
+        <div class="body"><dl class="kv" id="metaLib"></dl></div>
+      </section>
+    </div>
+
+    <!-- Develop -->
+    <div id="rightDevelop" class="hidden">
+      <div class="histo-wrap">
+        <canvas id="histo"></canvas>
+        <span class="clipbtn" id="clipS" title="Show shadow clipping (J)"></span>
+        <span class="clipbtn" id="clipH" title="Show highlight clipping (J)"></span>
+        <div class="histo-meta" id="histoMeta"></div>
+      </div>
+      <div class="tools">
+        <button data-tool="crop" title="Crop & straighten (R)"><svg><use href="#i-crop"/></svg>Crop</button>
+        <button data-tool="mask" title="Masks (M)"><svg><use href="#i-mask"/></svg>Masks</button>
+        <button data-tool="heal" title="Remove object (H)"><svg><use href="#i-heal"/></svg>Remove</button>
+        <button data-tool="clone" title="Clone stamp (C)"><svg><use href="#i-clone"/></svg>Clone</button>
+        <button id="beforeBtn" title="Before / after (\)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v18"/></svg>Before</button>
+        <button id="autoBtn" title="Auto tone"><svg viewBox="0 0 24 24"><path d="M5 19L19 5"/><path d="M5 5l3 3M16 16l3 3M9 19h3M19 12v3"/></svg>Auto</button>
+      </div>
+
+      <!-- Crop tool panel -->
+      <section class="panel hidden" id="pCrop">
+        <header><span class="chev"></span>Crop &amp; straighten<button class="reset" data-reset="crop">Reset</button></header>
+        <div class="body">
+          <div class="row" id="aspects"></div>
+          <div class="sl" data-path="crop.angle" data-min="-45" data-max="45" data-step="0.1"><label>Straighten</label><input class="val"><input type="range"></div>
+          <div class="row">
+            <button class="chip" id="flipH"><svg style="width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.6;vertical-align:-2px"><use href="#i-flipH"/></svg> Flip H</button>
+            <button class="chip" id="flipV"><svg style="width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.6;vertical-align:-2px"><use href="#i-flipV"/></svg> Flip V</button>
+            <button class="chip" id="rot90">Rotate 90°</button>
+            <span class="grow"></span>
+            <button class="chip on" id="cropDone">Done</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Masks panel -->
+      <section class="panel hidden" id="pMasks">
+        <header><span class="chev"></span>Masks<button class="reset" id="maskOverlayBtn">Overlay: on</button></header>
+        <div class="body">
+          <div class="addmask">
+            <button data-add="subject" id="addSubject"><svg><use href="#i-subject"/></svg>Subject</button>
+            <button data-add="people" id="addPeople"><svg><use href="#i-people"/></svg>People</button>
+            <button data-add="sky"><svg><use href="#i-sky"/></svg>Sky</button>
+            <button data-add="background" id="addBackground"><svg><use href="#i-bg"/></svg>Background</button>
+            <button data-add="brush"><svg><use href="#i-brush"/></svg>Brush</button>
+            <button data-add="linear"><svg><use href="#i-linear"/></svg>Linear</button>
+            <button data-add="radial"><svg><use href="#i-radial"/></svg>Radial</button>
+            <button data-add="range"><svg><use href="#i-lum"/></svg>Luminance</button>
+            <button data-add="color"><svg><use href="#i-color"/></svg>Colour</button>
+          </div>
+          <div class="masklist" id="maskList"></div>
+          <div id="maskEditor" class="hidden">
+            <div class="row"><label class="chip" title="The red tint shows where the mask applies. Turn it off to see what your adjustments do (O)."><input type="checkbox" id="maskOverlayOn" checked> Show mask overlay <span class="kbd">O</span></label></div>
+            <div id="maskGeom"></div>
+            <div class="subhead">Refine</div>
+            <div class="row">
+              <label class="chip"><input type="checkbox" id="maskInvert"> Invert</label>
+              <label class="chip"><input type="checkbox" id="maskRangeOn"> Luminance range</label>
+            </div>
+            <div id="maskRangeSliders" class="hidden">
+              <div class="sl" data-mask="range.lo" data-min="0" data-max="100" data-step="1"><label>From</label><input class="val"><input type="range"></div>
+              <div class="sl" data-mask="range.hi" data-min="0" data-max="100" data-step="1"><label>To</label><input class="val"><input type="range"></div>
+              <div class="sl" data-mask="range.smooth" data-min="0" data-max="100" data-step="1"><label>Smoothness</label><input class="val"><input type="range"></div>
+            </div>
+            <div class="subhead">Adjust</div>
+            <div class="sl" data-mask="amount" data-min="0" data-max="100" data-step="1"><label>Amount</label><input class="val"><input type="range"></div>
+            <div class="sl temp" data-mask="adj.temp" data-min="-100" data-max="100" data-step="1"><label>Temp</label><input class="val"><input type="range"></div>
+            <div class="sl tint" data-mask="adj.tint" data-min="-100" data-max="100" data-step="1"><label>Tint</label><input class="val"><input type="range"></div>
+            <div class="sl" data-mask="adj.exposure" data-min="-4" data-max="4" data-step="0.01"><label>Exposure</label><input class="val"><input type="range"></div>
+            <div class="sl" data-mask="adj.contrast" data-min="-100" data-max="100" data-step="1"><label>Contrast</label><input class="val"><input type="range"></div>
+            <div class="sl" data-mask="adj.highlights" data-min="-100" data-max="100" data-step="1"><label>Highlights</label><input class="val"><input type="range"></div>
+            <div class="sl" data-mask="adj.shadows" data-min="-100" data-max="100" data-step="1"><label>Shadows</label><input class="val"><input type="range"></div>
+            <div class="sl" data-mask="adj.whites" data-min="-100" data-max="100" data-step="1"><label>Whites</label><input class="val"><input type="range"></div>
+            <div class="sl" data-mask="adj.blacks" data-min="-100" data-max="100" data-step="1"><label>Blacks</label><input class="val"><input type="range"></div>
+            <div class="sl" data-mask="adj.texture" data-min="-100" data-max="100" data-step="1"><label>Texture</label><input class="val"><input type="range"></div>
+            <div class="sl" data-mask="adj.clarity" data-min="-100" data-max="100" data-step="1"><label>Clarity</label><input class="val"><input type="range"></div>
+            <div class="sl" data-mask="adj.dehaze" data-min="-100" data-max="100" data-step="1"><label>Dehaze</label><input class="val"><input type="range"></div>
+            <div class="sl" data-mask="adj.saturation" data-min="-100" data-max="100" data-step="1"><label>Saturation</label><input class="val"><input type="range"></div>
+            <div class="sl" data-mask="adj.sharpness" data-min="-100" data-max="100" data-step="1"><label>Sharpness</label><input class="val"><input type="range"></div>
+            <div class="subhead">Refine (paint to add/remove)</div>
+            <div class="row">
+              <span class="seg"><button id="refAdd">Add</button><button id="refSub">Subtract</button></span>
+              <button class="chip" id="refClear">Clear</button>
+            </div>
+            <div class="sl" id="refSize"><label>Brush size</label><input class="val"><input type="range" min="0.5" max="60" step="0.5"></div>
+            <div class="sl" id="refFeather"><label>Feather</label><input class="val"><input type="range" min="0" max="100" step="1"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel hidden" id="pHeal">
+        <header><span class="chev"></span>Remove object<button class="reset" id="healClearBtn">Clear</button></header>
+        <div class="body">
+          <p class="hint" id="healHint">Paint over what you want gone — a branch, a sensor spot, a stray tourist. Runs a local AI model (LaMa) once you lift the brush.</p>
+          <div class="sl" id="hSize"><label>Brush size</label><input class="val"><input type="range" min="0.5" max="60" step="0.5"></div>
+          <div class="sl" id="hFeather"><label>Feather</label><input class="val"><input type="range" min="0" max="100" step="1"></div>
+          <div class="row"><span class="chip" id="healStatus">Ready</span></div>
+        </div>
+      </section>
+
+      <section class="panel hidden" id="pClone">
+        <header><span class="chev"></span>Clone stamp<button class="reset" id="cloneClearBtn">Clear</button></header>
+        <div class="body">
+          <p class="hint" id="cloneHint">Alt-click to set a source point, then paint to duplicate pixels from there — good for repeating patterns or precise touch-ups the object-removal brush doesn't handle well.</p>
+          <div class="sl" id="cSize"><label>Brush size</label><input class="val"><input type="range" min="0.5" max="60" step="0.5"></div>
+          <div class="sl" id="cFeather"><label>Feather</label><input class="val"><input type="range" min="0" max="100" step="1"></div>
+          <div class="sl" id="cFlow"><label>Flow</label><input class="val"><input type="range" min="1" max="100" step="1"></div>
+          <div class="row"><span class="chip" id="cloneStatus">Alt-click to set a source point</span></div>
+        </div>
+      </section>
+
+      <section class="panel" id="pBasic">
+        <header><span class="chev"></span>Basic<button class="reset" data-reset="basic">Reset</button></header>
+        <div class="body">
+          <div class="row"><span class="subhead" style="margin:0 auto 0 0">Treatment</span>
+            <div class="seg" id="treatment"><button data-v="color" class="on">Colour</button><button data-v="bw">Black &amp; white</button></div>
+          </div>
+          <div class="row" style="justify-content:space-between"><span class="subhead" style="margin:0">White balance</span>
+            <span><button class="chip" id="wbShot">As shot</button> <button class="chip" id="wbAuto">Auto</button> <button class="chip" id="wbPick" title="Click a neutral grey in the photo">Picker</button></span></div>
+          <div class="sl temp" data-path="wb.temp" data-min="-100" data-max="100" data-step="1"><label>Temp</label><input class="val"><input type="range"></div>
+          <div class="sl tint" data-path="wb.tint" data-min="-100" data-max="100" data-step="1"><label>Tint</label><input class="val"><input type="range"></div>
+          <div class="subhead">Tone</div>
+          <div class="sl" data-path="tone.exposure" data-min="-5" data-max="5" data-step="0.01"><label>Exposure</label><input class="val"><input type="range"></div>
+          <div class="sl" data-path="tone.contrast" data-min="-100" data-max="100" data-step="1"><label>Contrast</label><input class="val"><input type="range"></div>
+          <div class="sl" data-path="tone.highlights" data-min="-100" data-max="100" data-step="1"><label>Highlights</label><input class="val"><input type="range"></div>
+          <div class="sl" data-path="tone.shadows" data-min="-100" data-max="100" data-step="1"><label>Shadows</label><input class="val"><input type="range"></div>
+          <div class="sl" data-path="tone.whites" data-min="-100" data-max="100" data-step="1"><label>Whites</label><input class="val"><input type="range"></div>
+          <div class="sl" data-path="tone.blacks" data-min="-100" data-max="100" data-step="1"><label>Blacks</label><input class="val"><input type="range"></div>
+          <div class="subhead">Presence</div>
+          <div class="sl" data-path="presence.texture" data-min="-100" data-max="100" data-step="1"><label>Texture</label><input class="val"><input type="range"></div>
+          <div class="sl" data-path="presence.clarity" data-min="-100" data-max="100" data-step="1"><label>Clarity</label><input class="val"><input type="range"></div>
+          <div class="sl" data-path="presence.dehaze" data-min="-100" data-max="100" data-step="1"><label>Dehaze</label><input class="val"><input type="range"></div>
+          <div class="sl" data-path="presence.vibrance" data-min="-100" data-max="100" data-step="1"><label>Vibrance</label><input class="val"><input type="range"></div>
+          <div class="sl" data-path="presence.saturation" data-min="-100" data-max="100" data-step="1"><label>Saturation</label><input class="val"><input type="range"></div>
+          <div class="sl" data-path="presence.denoise" data-min="0" data-max="100" data-step="1"><label>Denoise (AI)</label><input class="val"><input type="range"></div>
+          <div class="sl" data-path="presence.denoiseDetail" data-min="0" data-max="100" data-step="1" title="Bring back fine texture (feathers, fur, foliage) the denoiser smoothed away, without the noise"><label>Denoise detail</label><input class="val"><input type="range"></div>
+        </div>
+      </section>
+
+      <section class="panel" id="pCurve">
+        <header><span class="chev"></span>Tone curve<button class="reset" data-reset="curve">Reset</button></header>
+        <div class="body">
+          <div class="row"><div class="seg" id="curveChan"><button data-v="rgb" class="on">RGB</button><button data-v="r">Red</button><button data-v="g">Green</button><button data-v="b">Blue</button></div><span class="hint" style="margin-left:auto">Click to add · double-click to remove</span></div>
+          <canvas id="curve"></canvas>
+        </div>
+      </section>
+
+      <section class="panel" id="pHsl">
+        <header><span class="chev"></span>Colour mixer<button class="reset" data-reset="hsl">Reset</button></header>
+        <div class="body">
+          <div class="row"><div class="seg" id="hslMode"><button data-v="hue" class="on">Hue</button><button data-v="sat">Saturation</button><button data-v="lum">Luminance</button></div></div>
+          <div id="hslSliders"></div>
+        </div>
+      </section>
+
+      <section class="panel" id="pGrade">
+        <header><span class="chev"></span>Colour grading<button class="reset" data-reset="grading">Reset</button></header>
+        <div class="body">
+          <div class="wheel">
+            <div class="w"><canvas data-wheel="shadows"></canvas><div class="t">Shadows</div></div>
+            <div class="w"><canvas data-wheel="midtones"></canvas><div class="t">Midtones</div></div>
+            <div class="w"><canvas data-wheel="highlights"></canvas><div class="t">Highlights</div></div>
+          </div>
+          <div class="sl" data-path="grading.shadows.l" data-min="-100" data-max="100" data-step="1"><label>Shadows luminance</label><input class="val"><input type="range"></div>
+          <div class="sl" data-path="grading.midtones.l" data-min="-100" data-max="100" data-step="1"><label>Midtones luminance</label><input class="val"><input type="range"></div>
+          <div class="sl" data-path="grading.highlights.l" data-min="-100" data-max="100" data-step="1"><label>Highlights luminance</label><input class="val"><input type="range"></div>
+          <div class="sl" data-path="grading.blending" data-min="0" data-max="100" data-step="1"><label>Blending</label><input class="val"><input type="range"></div>
+          <div class="sl" data-path="grading.balance" data-min="-100" data-max="100" data-step="1"><label>Balance</label><input class="val"><input type="range"></div>
+        </div>
+      </section>
+
+      <section class="panel" id="pDetail">
+        <header><span class="chev"></span>Detail<button class="reset" data-reset="detail">Reset</button></header>
+        <div class="body">
+          <div class="sl" data-path="detail.sharpen" data-min="0" data-max="150" data-step="1"><label>Sharpening</label><input class="val"><input type="range"></div>
+          <div class="sl" data-path="detail.radius" data-min="0.5" data-max="3" data-step="0.1"><label>Radius</label><input class="val"><input type="range"></div>
+          <div class="sl" data-path="detail.detail" data-min="0" data-max="100" data-step="1" title="Low: halo-free, only edges. High: crisp fine texture."><label>Detail</label><input class="val"><input type="range"></div>
+          <div class="sl" data-path="detail.masking" data-min="0" data-max="100" data-step="1" title="Raise to keep sharpening off flat areas (sky, skin, bokeh) and on real edges"><label>Masking</label><input class="val"><input type="range"></div>
+          <div class="row"><button class="chip" id="sharpenSubjectBtn" title="Adds a Subject mask with extra sharpness and texture — the subject pops, the background stays smooth">Sharpen subject</button></div>
+          <div class="hint">Sharpening works on luminance only, so it never boosts colour noise. Pair it with Denoise (AI) in Basic for clean, crisp subjects.</div>
+        </div>
+      </section>
+
+      <section class="panel" id="pLens">
+        <header><span class="chev"></span>Lens corrections<button class="reset" data-reset="lens">Reset</button></header>
+        <div class="body">
+          <label class="chip"><input type="checkbox" id="lensAutoProfile"> Auto lens correction</label>
+          <div class="hint" id="lensProfileStatus">No matching profile — using manual sliders only.</div>
+          <div class="sl" data-path="lens.profileVignette" data-min="0" data-max="100" data-step="1"><label>Profile vignetting</label><input class="val"><input type="range"></div>
+          <div class="sl" data-path="lens.distortion" data-min="-100" data-max="100" data-step="1"><label>Distortion</label><input class="val"><input type="range"></div>
+          <div class="sl" data-path="lens.vignette" data-min="-100" data-max="100" data-step="1"><label>Vignetting</label><input class="val"><input type="range"></div>
+          <div class="hint">Manual corrections layer on top of the auto profile correction above.</div>
+        </div>
+      </section>
+
+      <section class="panel" id="pEffects">
+        <header><span class="chev"></span>Effects<button class="reset" data-reset="effects">Reset</button></header>
+        <div class="body">
+          <div class="subhead">Post-crop vignette</div>
+          <div class="sl" data-path="effects.vignette" data-min="-100" data-max="100" data-step="1"><label>Amount</label><input class="val"><input type="range"></div>
+          <div class="sl" data-path="effects.midpoint" data-min="0" data-max="100" data-step="1"><label>Midpoint</label><input class="val"><input type="range"></div>
+          <div class="sl" data-path="effects.feather" data-min="0" data-max="100" data-step="1"><label>Feather</label><input class="val"><input type="range"></div>
+          <div class="sl" data-path="effects.roundness" data-min="-100" data-max="100" data-step="1"><label>Roundness</label><input class="val"><input type="range"></div>
+          <div class="subhead">Grain</div>
+          <div class="sl" data-path="effects.grain" data-min="0" data-max="100" data-step="1"><label>Amount</label><input class="val"><input type="range"></div>
+          <div class="sl" data-path="effects.grainSize" data-min="1" data-max="6" data-step="0.5"><label>Size</label><input class="val"><input type="range"></div>
+          <div class="subhead">Color enhance</div>
+          <div class="sl" data-path="effects.colorEnhance" data-min="-100" data-max="100" data-step="1"><label>Amount</label><input class="val"><input type="range"></div>
+          <div class="subhead">Dynamic contrast</div>
+          <div class="sl" data-path="effects.dynamicContrast" data-min="-100" data-max="100" data-step="1"><label>Amount</label><input class="val"><input type="range"></div>
+          <div class="subhead">Glow (Orton / Glamour)</div>
+          <div class="sl" data-path="effects.glow.amount" data-min="0" data-max="100" data-step="1"><label>Amount</label><input class="val"><input type="range"></div>
+          <div class="sl" data-path="effects.glow.radius" data-min="0" data-max="100" data-step="1"><label>Radius</label><input class="val"><input type="range"></div>
+          <div class="sl" data-path="effects.glow.threshold" data-min="0" data-max="100" data-step="1"><label>Threshold</label><input class="val"><input type="range"></div>
+          <div class="sl" data-path="effects.glow.warmth" data-min="0" data-max="100" data-step="1"><label>Warmth</label><input class="val"><input type="range"></div>
+          <div class="subhead">Sun flare</div>
+          <div class="sl" data-path="effects.sunFlare.amount" data-min="0" data-max="100" data-step="1"><label>Amount</label><input class="val"><input type="range"></div>
+          <div class="sl" data-path="effects.sunFlare.x" data-min="0" data-max="100" data-step="1"><label>Position X</label><input class="val"><input type="range"></div>
+          <div class="sl" data-path="effects.sunFlare.y" data-min="0" data-max="100" data-step="1"><label>Position Y</label><input class="val"><input type="range"></div>
+          <div class="sl" data-path="effects.sunFlare.size" data-min="5" data-max="100" data-step="1"><label>Size</label><input class="val"><input type="range"></div>
+          <div class="sl" data-path="effects.sunFlare.warmth" data-min="0" data-max="100" data-step="1"><label>Warmth</label><input class="val"><input type="range"></div>
+        </div>
+      </section>
+
+      <section class="panel closed">
+        <header><span class="chev"></span>Metadata</header>
+        <div class="body"><dl class="kv" id="metaDev"></dl></div>
+      </section>
+    </div>
+  </aside>
+
+  <div id="filmstrip"></div>
+</div>
+
+<!-- dialogs -->
+<dialog id="dlgImport">
+  <header>Import folder</header>
+  <div class="body">
+    <div class="path" id="impPath"></div>
+    <div class="browser" id="impBrowser"></div>
+    <label><span>Include subfolders</span><input type="checkbox" id="impRecursive" checked></label>
+    <div class="hint">Click a folder to choose it, or <b>›</b> (double-click) to open it. Photos stay where they are. Mantiphy catalogs them and writes a small <code>.mantiphy.json</code> sidecar next to each file you edit.</div>
+  </div>
+  <footer><button class="tb" data-close>Cancel</button><button class="tb primary" id="impGo">Import this folder</button></footer>
+</dialog>
+
+<dialog id="dlgExport">
+  <header>Export</header>
+  <div class="body">
+    <label><span>Photos</span><span id="expCount">—</span></label>
+    <label><span>Export to</span><select id="expDestMode"><option value="folder">Specific folder</option><option value="source">Same folder as original photo</option></select></label>
+    <label id="expDestRow"><span>Folder</span><input type="text" id="expDest"></label>
+    <label><span>Put in subfolder</span><span class="inline"><input type="checkbox" id="expSubOn"><input type="text" id="expSub" placeholder="Edited" disabled></span></label>
+    <label><span>Existing files</span><select id="expExisting">
+      <option value="ask">Ask what to do</option>
+      <option value="rename">Choose a new name for the exported file</option>
+      <option value="overwrite">Overwrite WITHOUT WARNING</option>
+      <option value="skip">Skip</option>
+    </select></label>
+    <label><span>Format</span><select id="expFmt"><option value="jpeg">JPEG</option><option value="png">PNG</option><option value="webp">WebP</option><option value="tiff">TIFF</option><option value="tiff16">TIFF 16-bit (print / further editing)</option></select></label>
+    <label><span>Quality</span><input type="range" id="expQ" min="50" max="100" value="92"> </label>
+    <label><span>Resize long edge</span><input type="number" id="expEdge" min="0" placeholder="0 = full size" value="0"></label>
+    <label><span>Output sharpening</span><select id="expSharp"><option value="0">None</option><option value="40">Screen (low)</option><option value="80">Screen (standard)</option><option value="130">Print</option></select></label>
+    <label><span>DPI</span><input type="number" id="expDpi" min="0" placeholder="0 = default"></label>
+    <label><span>Metadata</span><select id="expMeta"><option value="copy">Copy from original</option><option value="none">None (strip)</option></select></label>
+    <label><span></span><span class="inline"><input type="checkbox" id="expKeywords"> Include keywords</span></label>
+    <label><span>Copyright</span><input type="text" id="expCopyright" placeholder="optional"></label>
+    <label><span>Filename</span><input type="text" id="expName" value="{name}"></label>
+    <div class="hint" id="expHint">Pixels are rendered on your GPU with the exact preview pipeline, then saved by the backend with the original EXIF.</div>
+  </div>
+  <footer><button class="tb" data-close>Cancel</button><button class="tb primary" id="expGo">Export</button></footer>
+</dialog>
+
+<dialog id="dlgName">
+  <header id="nameTitle">Name</header>
+  <div class="body">
+    <label><span id="nameLabel">Name</span><input type="text" id="nameInput"></label>
+    <label id="nameFolderRow" style="display:none"><span>Folder</span><input type="text" id="nameFolderInput" list="presetFolders"></label>
+    <datalist id="presetFolders"></datalist>
+  </div>
+  <footer><button class="tb" data-close>Cancel</button><button class="tb primary" id="nameGo">Save</button></footer>
+</dialog>
+
+<dialog id="dlgPick">
+  <header>Add to collection</header>
+  <div class="body"><div class="browser" id="pickList"></div></div>
+  <footer><button class="tb" data-close>Cancel</button></footer>
+</dialog>
+
+<dialog id="dlgKeys">
+  <header>Keyboard shortcuts</header>
+  <div class="body"><div class="shortcuts" id="keysList"></div></div>
+  <footer><button class="tb primary" data-close>Close</button></footer>
+</dialog>
+<dialog id="dlgStack">
+  <header>Stack photos</header>
+  <div class="body">
+    <label><span>Photos</span><span id="stackCount">—</span></label>
+    <div class="stackmodes">
+      <label class="stackmode"><input type="radio" name="stackMode" value="median" checked><b>Remove moving people &amp; objects</b><small>Median of the burst: anyone walking through vanishes. Best with 8–15 shots a few seconds apart, camera on a tripod or held steady.</small></label>
+      <label class="stackmode"><input type="radio" name="stackMode" value="mean"><b>Reduce noise</b><small>Average of the burst: noise drops by about √N while the scene stays sharp — a clean night shot from several handheld frames.</small></label>
+      <label class="stackmode"><input type="radio" name="stackMode" value="lighten"><b>Light trails</b><small>Keeps the brightest pixel: car light trails, star trails, fireworks.</small></label>
+      <label class="stackmode"><input type="radio" name="stackMode" value="focus"><b>Focus stack</b><small>Keeps each area from the shot where it is sharpest: macro, or a landscape sharp from the foreground to the horizon. Shoot on a tripod, moving the focus a little between shots.</small></label>
+    </div>
+    <label><span>Align frames</span><input type="checkbox" id="stackAlign" checked></label>
+    <div class="hint">The result is a new lossless TIFF next to the first photo, added to the catalog and opened for editing. Your originals are not touched.</div>
+  </div>
+  <footer><button class="tb" data-close>Cancel</button><button class="tb primary" id="stackGo">Stack</button></footer>
+</dialog>
+<dialog id="dlgSlideshow">
+  <header>Slideshow</header>
+  <div class="body">
+    <label><span>Photos</span><span id="slideCount">—</span></label>
+    <label><span>Duration per photo</span><select id="slideDuration">
+      <option value="3">3s</option>
+      <option value="4" selected>4s</option>
+      <option value="6">6s</option>
+      <option value="8">8s</option>
+      <option value="10">10s</option>
+    </select></label>
+    <div class="hint">Renders your basic edits (tone, colour, crop, geometric masks) — Heal/Clone, AI denoise, and AI masks (Subject/Background/People/Sky) are not shown, so preparation stays fast even for a large selection.</div>
+  </div>
+  <footer><button class="tb" data-close>Cancel</button><button class="tb primary" id="slideGo">Start</button></footer>
+</dialog>
+
+<script src="vendor/leaflet.js"></script>
+<script src="vendor/leaflet.markercluster.js"></script>
+<script type="module" src="app.js"></script>
+<dialog id="dlgClash">
+  <header>File already exists</header>
+  <div class="body">
+    <div class="hint" id="clashMsg"></div>
+    <label><span>Apply to all</span><span class="inline"><input type="checkbox" id="clashAll"> <span class="hint" style="margin:0">Use this choice for the rest of the export</span></span></label>
+  </div>
+  <footer>
+    <button class="tb" id="clashSkip">Skip</button>
+    <button class="tb" id="clashOver">Overwrite</button>
+    <button class="tb primary" id="clashRename">Choose a new name</button>
+  </footer>
+</dialog>
+
+<div id="expProgress" class="hidden">
+  <div class="ep-head"><span id="epTitle">Exporting…</span><button class="tb" id="epCancel">Cancel</button></div>
+  <div class="ep-bar"><i id="epFill"></i></div>
+  <div class="ep-sub"><span id="epCount"></span><span id="epDest"></span></div>
+</div>
+<div id="slideshowView" class="hidden">
+  <div class="ss-layer" id="ssLayerA"></div>
+  <div class="ss-layer" id="ssLayerB"></div>
+  <div class="ss-bar" id="ssBar">
+    <button class="tb" id="ssPrev" title="Previous (←)"><svg><use href="#i-prev"/></svg></button>
+    <button class="tb" id="ssPlay" title="Play / Pause (Space)"><svg><use href="#i-pause"/></svg></button>
+    <button class="tb" id="ssNext" title="Next (→)"><svg><use href="#i-next"/></svg></button>
+    <button class="tb" id="ssExit" title="Exit (Esc)">Esc</button>
+  </div>
+</div>
+<div id="dropzone" class="hidden"><div class="dz-card">
+  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder"/></svg>
+  <b>Drop to import</b>
+  <span id="dzWhat">Folders are catalogued where they are</span>
+</div></div>
+<div id="ctxmenu" class="hidden"></div>
+</body>
+</html>

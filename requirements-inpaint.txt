@@ -1,0 +1,15 @@
+# Optional: object removal (paint-out) via LaMa inpainting.
+#
+# Note that simple-lama-inpainting is deliberately NOT listed here. Its 0.1.2
+# metadata pins numpy<2, pillow<10 and fire<0.6 and declares torchvision, which
+# contradicts requirements.txt and has no wheels on recent Pythons — letting pip
+# resolve it downgrades Pillow and breaks the app. The package only ever imports
+# torch, cv2, numpy, PIL and fire, so run.sh installs it with --no-deps and the
+# lines below are the dependencies it genuinely needs.
+#
+# For GPU acceleration, install a matching torch build BEFORE this file:
+#   AMD:    pip install torch --index-url https://download.pytorch.org/whl/rocm7.1
+#   NVIDIA: pip install torch --index-url https://download.pytorch.org/whl/cu121
+torch>=2.2
+opencv-python-headless>=4.9
+fire>=0.5

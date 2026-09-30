@@ -1,0 +1,8 @@
+{
+  "name": "mantiphy-ui-tests",
+  "private": true,
+  "type": "module",
+  "description": "Playwright smoke tests for the Mantiphy frontend — see run.sh",
+  "scripts": { "test": "./run.sh" },
+  "devDependencies": { "playwright": "^1.56.0" }
+}

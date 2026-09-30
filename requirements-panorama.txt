@@ -1,0 +1,6 @@
+# Optional: panorama stitching (Stitch to Panorama… in the Library
+# grid's right-click menu). Same single dependency as
+# requirements-hdr.txt — kept in its own file so a user can install
+# just this feature without HDR merge, per this project's
+# one-flag-per-optional-feature convention.
+opencv-python-headless>=4.9
