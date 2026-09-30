@@ -10,6 +10,8 @@ A Linux-native photo library and non-destructive RAW editor, in the spirit of Li
 
 ## Install & run (Linux)
 
+Step-by-step guides, including Windows through WSL: **[English](docs/Guide-installation-Windows-Linux-EN.md)** · **[Français](docs/Guide-installation-Windows-Linux-FR.md)**
+
 ```bash
 git clone https://github.com/Ondormish/Mantiphy_Public.git mantiphy
 cd mantiphy
@@ -88,7 +90,7 @@ The browser is used as a rendering runtime, not as "a website": everything runs 
 
 ## Known limitations
 
-- **Linux only.** It is developed and used on Fedora/Nobara with KDE; other distributions should work but are less tested. No Windows or macOS support.
+- **Linux, or Windows through WSL.** It is developed and used on Fedora/Nobara with KDE and checked on Ubuntu 22.04/24.04, Fedora and Arch; the Windows (WSL) path has not been tried on a real Windows PC yet. No native Windows or macOS build.
 - **A Chromium-family browser is recommended** for the app window; Firefox works in a normal tab.
 - **GPU acceleration for AI features is young on AMD**: tested on an RX 9060 XT (RDNA4) with ROCm 7.1. Everything falls back to the CPU when the GPU path is not available.
 - **Presets and synced settings update thumbnails lazily**: a photo's thumbnail shows its new look once it has been opened in Develop.
@@ -124,8 +126,9 @@ deleting the two folders above erases everything Mantiphy knows, sidecars next t
 The server listens on `127.0.0.1` only and answers nothing but its own page: requests carrying another
 `Host` (DNS rebinding) or coming from another site (`Origin` / `Sec-Fetch-Site`) are refused, so a web
 page open in your browser cannot read your library or write files through it. Text taken from photos,
-file names and sidecars is escaped before display. Models downloaded by Mantiphy itself are pinned and
-checked against a SHA-256 before use.
+file names and sidecars is escaped before display. Every AI model is checked against a known hash
+before use: SHA-256 pinned in Mantiphy for denoise, sky and object removal (a tampered copy, even one
+already in the cache, is refused), and rembg's own checks for the mask models.
 
 Found a vulnerability? Please report it privately through GitHub's *Report a vulnerability* button on
 the repository's Security tab rather than in a public issue.

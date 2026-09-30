@@ -2237,6 +2237,14 @@ _skyseg_sess = None
 _skyseg_failed = False
 
 
+def _file_sha256(p: Path) -> str:
+    h = hashlib.sha256()
+    with open(p, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
 def _check_sha256(data: bytes, expected: str, what: str):
     """Refuse a downloaded model whose bytes are not the ones this release was
     tested with — a replaced or corrupted file never gets loaded."""
@@ -2250,7 +2258,7 @@ def _skyseg_model_path() -> Path:
     _denoise_model_path() above (this codebase has no shared download
     helper — each optional model does its own plain urllib download)."""
     dest = CACHE_DIR / "models" / "skyseg.onnx"
-    if dest.exists():
+    if dest.exists() and _file_sha256(dest) == _SKYSEG_MODEL_SHA256:
         return dest
     dest.parent.mkdir(parents=True, exist_ok=True)
     import urllib.request
@@ -2485,11 +2493,37 @@ def _inpaint_device() -> str:
     return _lama_device
 
 
+_LAMA_MODEL_URL = "https://github.com/enesmsahin/simple-lama-inpainting/releases/download/v0.1.0/big-lama.pt"
+_LAMA_MODEL_SHA256 = "7ba7aa7ac37a4d41fdbbeba3a2af7ead18058552997e3a3cd1a3b2210c9e6b4c"
+
+
+def _lama_model_path() -> Path:
+    """The LaMa weights, checked against their SHA-256 like the other models.
+    simple_lama_inpainting would download them itself with no integrity check,
+    so Mantiphy fetches them and hands over the path (LAMA_MODEL). A copy that
+    torch hub already cached for an earlier version is reused when it matches."""
+    dest = CACHE_DIR / "models" / "big-lama.pt"
+    hub = Path(os.environ.get("TORCH_HOME", Path.home() / ".cache" / "torch")) / "hub" / "checkpoints" / "big-lama.pt"
+    for cand in (dest, hub):
+        if cand.exists() and _file_sha256(cand) == _LAMA_MODEL_SHA256:
+            return cand
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    import urllib.request
+    with urllib.request.urlopen(_LAMA_MODEL_URL, timeout=300) as resp:
+        data = resp.read()
+    _check_sha256(data, _LAMA_MODEL_SHA256, "object removal model")
+    tmp = dest.with_suffix(dest.suffix + ".part")
+    tmp.write_bytes(data)
+    os.replace(tmp, dest)
+    return dest
+
+
 def _lama_model():
     """Lazily load LaMa. simple_lama_inpainting picks CUDA automatically when torch reports it
     available, otherwise falls back to CPU — no config needed on your side."""
     global _lama
     if _lama is None:
+        os.environ["LAMA_MODEL"] = str(_lama_model_path())
         from simple_lama_inpainting import SimpleLama
         _lama = SimpleLama()
     return _lama
@@ -2525,7 +2559,7 @@ def _denoise_model_path() -> Path:
     release asset is a zip; we don't hardcode its internal layout, just grab
     the one .onnx file inside."""
     dest = CACHE_DIR / "models" / "denoise-nind.onnx"
-    if dest.exists():
+    if dest.exists() and _file_sha256(dest) == _DENOISE_MODEL_SHA256:
         return dest
     dest.parent.mkdir(parents=True, exist_ok=True)
     import io as _io
