@@ -85,16 +85,37 @@ else:
 done
 PORT="${MANTIPHY_PORT:-7878}"
 URL="http://127.0.0.1:$PORT"
-.venv/bin/python backend/server.py &
-PID=$!
-trap 'kill $PID 2>/dev/null' EXIT
-for i in $(seq 1 40); do curl -s "$URL/api/health" >/dev/null 2>&1 && break; sleep 0.25; done
+PROFILE="${XDG_DATA_HOME:-$HOME/.local/share}/mantiphy/chrome-profile"
+alive() { curl -s -m 2 "$URL/api/health" 2>/dev/null | grep -q '"rawpy"'; }
+
+# One server for every Mantiphy window. A second launch (a double click, the
+# menu entry clicked again) only opens another window on the running server:
+# starting a second server would fail on the port, and its window would then
+# depend on a server that the first window's launcher stops when it closes.
+OWN=""
+if ! alive; then
+  .venv/bin/python backend/server.py &
+  OWN=$!
+  trap 'kill $OWN 2>/dev/null' EXIT
+  for i in $(seq 1 240); do
+    alive && break
+    kill -0 "$OWN" 2>/dev/null || { echo "Mantiphy's server stopped while starting (see the messages above)."; exit 1; }
+    sleep 0.25
+  done
+  alive || { echo "Mantiphy's server did not answer within 60 s."; exit 1; }
+fi
+
 # Prefer an app-mode window (no browser chrome) when a Chromium-family browser is around.
 for B in chromium chromium-browser google-chrome google-chrome-stable brave-browser microsoft-edge; do
   if command -v "$B" >/dev/null 2>&1; then
-    "$B" --app="$URL" --user-data-dir="${XDG_DATA_HOME:-$HOME/.local/share}/mantiphy/chrome-profile" >/dev/null 2>&1
+    "$B" --app="$URL" --user-data-dir="$PROFILE" >/dev/null 2>&1
+    [ -n "$OWN" ] || exit 0
+    # The browser command may return at once, having handed the window to a
+    # browser already running with this profile: keep the server until no
+    # Mantiphy window is left, not just until this command returns.
+    while pgrep -f -- "--user-data-dir=$PROFILE" >/dev/null; do sleep 2; done
     exit 0
   fi
 done
 xdg-open "$URL" >/dev/null 2>&1 || echo "Open $URL in your browser."
-wait $PID
+[ -n "$OWN" ] && wait "$OWN"
